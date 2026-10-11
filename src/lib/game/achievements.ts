@@ -4,7 +4,7 @@
 
 import { AchievementDef, GameState, SkillId, COMBAT_SKILLS } from '@/types/game';
 import { totalSkillLevel, combatLevelSum } from './skills';
-import { TOTAL_MONSTERS, MONSTERS } from './monsters';
+import { TOTAL_MONSTERS, countCollectedCards } from './monsters';
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   // ===== 战斗 =====
@@ -46,8 +46,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'equip_mythic', name: '神器降世', icon: '🌠', description: '获得一件神品装备', metric: 'bestQualityMythic', target: 1, gemReward: 80 },
 
   // ===== 灵宠 =====
-  { id: 'pet_1', name: '初结灵缘', icon: '🥚', description: '收服第 1 只灵宠', metric: 'pets', target: 1, gemReward: 10 },
-  { id: 'pet_5', name: '灵兽成群', icon: '🐣', description: '收服 5 只灵宠', metric: 'pets', target: 5, gemReward: 20 },
+  { id: 'pet_1', name: '初结灵缘', icon: '🥚', description: '累计收服 1 只灵宠', metric: 'petsCaptured', target: 1, gemReward: 10 },
+  { id: 'pet_5', name: '灵兽成群', icon: '🐣', description: '累计收服 5 只灵宠', metric: 'petsCaptured', target: 5, gemReward: 20 },
   { id: 'pet_12', name: '万灵之友', icon: '🐾', description: '灵宠栏全部占满（12 只）', metric: 'pets', target: 12, gemReward: 60 },
   { id: 'pet_lv50', name: '御兽真传', icon: '🐉', description: '任意灵宠达到 50 级', metric: 'bestPetLevel', target: 50, gemReward: 25 },
   { id: 'pet_lv200', name: '兽神附体', icon: '🐲', description: '任意灵宠达到 200 级', metric: 'bestPetLevel', target: 200, gemReward: 120 },
@@ -97,16 +97,19 @@ export function achievementValue(metric: string, state: GameState): number {
     case 'combatSum': return combatLevelSum(state.skills);
     case 'cardTypes': {
       // 与图鉴同口径：按妖兽总表扫描，陈旧卡片 id 不计数
-      const cards = state.cards ?? {};
-      return MONSTERS.reduce((a, m) => a + ((cards[m.id] ?? 0) > 0 ? 1 : 0), 0);
+      return countCollectedCards(state.cards);
     }
     case 'pets': return (state.pets ?? []).length;
+    // 累计收服口径：放生不影响已收服计数（stats.petsCaptured）
+    case 'petsCaptured': return state.stats.petsCaptured ?? 0;
     case 'bestPetLevel': return Math.max(0, ...(state.pets ?? []).map(p => p.level));
     case 'petMaxStage': return Math.max(0, ...(state.pets ?? []).map(p => p.stage ?? 0));
     case 'petMaxStars': return Math.max(0, ...(state.pets ?? []).map(p => p.stars ?? 0));
     case 'maxRefine': return Math.max(0, ...Object.values(state.equips).map(e => e.refine ?? 0));
     case 'sectJoined': return state.sect ? 1 : 0;
-    case 'sectContrib': return state.sect?.totalContrib ?? 0;
+    // 累计宗门贡献跨宗门口径：离宗时入账 stats.sectContribTotal，不因脱离/换宗清零
+    case 'sectContrib':
+      return (state.stats.sectContribTotal ?? 0) + (state.sect?.totalContrib ?? 0);
     case 'rebirths': return state.rebirth?.count ?? 0;
     case 'wbKills': return state.stats.wbKills ?? 0;
     case 'wbUnique': return (state.stats.wbSlain ?? []).length;

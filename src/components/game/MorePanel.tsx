@@ -8,7 +8,7 @@ import { getItem, QUALITY_TEXT, AFFIX_NAMES } from '@/lib/game/items';
 import { FORGE_RECIPES, forgeCostCheck, ForgeRecipe } from '@/lib/game/forge';
 import { formatAffix } from '@/lib/game/items';
 import { ACHIEVEMENTS, achievementValue } from '@/lib/game/achievements';
-import { REGIONS, getMonstersByRegion, TOTAL_MONSTERS, MONSTERS } from '@/lib/game/monsters';
+import { REGIONS, getMonstersByRegion, TOTAL_MONSTERS, MONSTERS, countCollectedCards } from '@/lib/game/monsters';
 import {
   SCENES, isSceneUnlocked, unlockedSceneCount, sceneUnlockHint, SceneKind,
   ALBUM_REWARDS, albumGroupProgress, isAlbumRewardClaimed, isAlbumRewardAvailable,
@@ -248,9 +248,11 @@ function ShopView({ onBack }: { onBack: () => void }) {
 // ===== 成就 =====
 function AchievementsView({ onBack }: { onBack: () => void }) {
   const store = useGameStore();
+  // 永久成就口径：高水位（曾达标）即计入完成数，当前值回退不影响
   const done = ACHIEVEMENTS.filter(a => {
     const s = store.achievements[a.id];
-    return s?.claimed || achievementValue(a.metric, store) >= a.target;
+    const hw = Math.max(achievementValue(a.metric, store), s?.bestValue ?? 0);
+    return s?.claimed || hw >= a.target;
   }).length;
 
   return (
@@ -260,7 +262,8 @@ function AchievementsView({ onBack }: { onBack: () => void }) {
         {ACHIEVEMENTS.map(a => {
           const value = achievementValue(a.metric, store);
           const state = store.achievements[a.id];
-          const achieved = (state?.claimed || value >= a.target);
+          const hw = Math.max(value, state?.bestValue ?? 0);
+          const achieved = (state?.claimed || hw >= a.target);
           const pct = Math.min(100, (value / a.target) * 100);
           return (
             <div key={a.id} className={cn('rounded-xl border p-3',
@@ -279,7 +282,7 @@ function AchievementsView({ onBack }: { onBack: () => void }) {
                     </div>
                   )}
                 </div>
-                {!state?.claimed && value >= a.target && (
+                {!state?.claimed && hw >= a.target && (
                   <ActionButton className="!min-h-[36px] !px-3 text-xs" onClick={() => store.claimAchievement(a.id)}>领取</ActionButton>
                 )}
               </div>
@@ -292,12 +295,7 @@ function AchievementsView({ onBack }: { onBack: () => void }) {
 }
 
 // ===== 妖兽图鉴 =====
-// 收集数按妖兽总表扫描：卡片记录里若存在陈旧 id（妖兽改名/删减遗留），不计入总数
-export function countCollectedCards(cards: Record<string, number> | undefined): number {
-  if (!cards) return 0;
-  return MONSTERS.reduce((a, m) => a + ((cards[m.id] ?? 0) > 0 ? 1 : 0), 0);
-}
-
+// 收集数口径统一在 lib/game/monsters.ts 的 countCollectedCards（图鉴/成就/天梯共用）
 function CodexView({ onBack }: { onBack: () => void }) {
   const store = useGameStore();
   const cards = store.cards ?? {};

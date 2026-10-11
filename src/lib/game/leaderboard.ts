@@ -5,7 +5,7 @@
 import { GameState } from '@/types/game';
 import { totalSkillLevel } from './skills';
 import { equipTotals } from './engine';
-import { MONSTER_MAP } from './monsters';
+import { countCollectedCards } from './monsters';
 
 // NPC 修士名单（仙侠风）
 const NPC_NAMES: { name: string; icon: string }[] = [
@@ -40,7 +40,8 @@ export function computePowerScore(state: GameState): number {
   return Math.round(
     skillSum * 4 + eqScore + petScore + refineScore + rebirthScore +
     state.stats.bossKills * 30 + wbKills * 150 +
-    Object.keys(state.cards).length * 12 +
+    // 与图鉴/成就同口径：陈旧卡片 id 不计入评分（防旧档残留 id 虚高战力）
+    countCollectedCards(state.cards) * 12 +
     state.stats.totalKills * 0.5
   );
 }

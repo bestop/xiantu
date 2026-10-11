@@ -7,7 +7,7 @@ import {
   SkillId, OfflineReport, ActivityId, InvItem, EquipSlots, COMBAT_SKILLS, ActiveBuffKey,
 } from '@/types/game';
 import { xpMultiplier, dropMultiplier, critBonus, equipDropBonus, gatherTier, xpToNext, offlineEfficiency, offlineCapSeconds, ACTIVITY_MAP } from './skills';
-import { generateEquipment, rollQuality, getItem, genUid } from './items';
+import { generateEquipment, rollQuality, getItem, genUid, QUALITY_ORDER } from './items';
 import { MONSTER_MAP, getRecommendedMonster, getMonstersByRegion, BOSS_ONLY_DROPS } from './monsters';
 import { petBonus } from './pets';
 import { refineMainMult, refineAffixMult } from './refine';
@@ -483,7 +483,12 @@ export function getShopEntries(): { itemId: string; price: number; currency: 'go
 
 // 随机装备袋（宝石购买）
 export function openEquipBag(tier: number, minQuality: ItemQualityForBag): Equipment {
-  const quality = rollQuality(1, minQuality === 'legendary' ? 8 : 3);
+  let quality = rollQuality(1, minQuality === 'legendary' ? 8 : 3);
+  // 商店保底：宝袋文案承诺「上品/仙品及以上」，roll 低于保底品质时抬升
+  // （修复：原实现仅加权不保底，稀有宝袋约 56% 开出凡品/良品）
+  if (QUALITY_ORDER.indexOf(quality) < QUALITY_ORDER.indexOf(minQuality)) {
+    quality = minQuality;
+  }
   return generateEquipment(Math.max(1, tier), quality);
 }
 

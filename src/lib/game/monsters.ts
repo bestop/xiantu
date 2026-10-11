@@ -203,3 +203,10 @@ export function getRecommendedMonster(avgCombatLevel: number): MonsterDef {
 }
 
 export const TOTAL_MONSTERS = MONSTERS.length;
+
+// 图鉴收集数：按妖兽总表扫描，卡片记录里的陈旧 id（妖兽改名/删减遗留）不计入
+// 图鉴 / 成就 cardTypes / 天梯评分共用此口径
+export function countCollectedCards(cards: Record<string, number> | undefined): number {
+  if (!cards) return 0;
+  return MONSTERS.reduce((a, m) => a + ((cards[m.id] ?? 0) > 0 ? 1 : 0), 0);
+}

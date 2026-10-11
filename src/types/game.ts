@@ -241,6 +241,8 @@ export interface Statistics {
   playStart: number;
   // v2 新增（旧存档缺失时用默认值兼容）
   petsCaptured: number;
+  // v4 新增：离宗时入账的累计宗门贡献（成就「累计宗门贡献」跨宗门口径，旧档缺省 0）
+  sectContribTotal: number;
   wbKills: number;       // 世界 BOSS 击杀数
   wbBestDamage: number;  // 单次挑战最高伤害
   wbSlain?: string[];    // 已首次击杀过的世界 BOSS 名（限定称号依据）

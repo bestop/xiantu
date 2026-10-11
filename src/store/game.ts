@@ -9,7 +9,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   GameState, SkillId, ActivityId, TabId, BattleRewards, EquipSlot,
   Equipment, OfflineReport, InvItem, AchievementState, MoreViewId,
-  PlayerSectState, SectId, ActiveBuff, ActiveBuffKey,
+  PlayerSectState, SectId, ActiveBuff, ActiveBuffKey, Statistics,
 } from '@/types/game';
 import { ACTIVITY_MAP, xpToNext, gatherTier, combatLevelSum, pillMultiplier } from '@/lib/game/skills';
 import {
@@ -53,7 +53,7 @@ const initialStats = () => ({
   totalBattles: 0, totalWins: 0, totalKills: 0, bossKills: 0,
   totalGoldEarned: 0, totalExpEarned: 0, totalDrops: 0,
   offlineSessions: 0, playStart: Date.now(),
-  petsCaptured: 0, wbKills: 0, wbBestDamage: 0,
+  petsCaptured: 0, sectContribTotal: 0, wbKills: 0, wbBestDamage: 0,
 });
 
 const initialState: GameState = {
@@ -195,6 +195,10 @@ export const useGameStore = create<GameStore>()(
         // 旧存档兼容：补齐 v2/v3 新增字段
         const s = get();
         const stats = { ...initialStats(), ...s.stats };
+        // 旧档迁移：petsCaptured 字段加入前已拥有灵宠的存档，以当前灵宠数兑底
+        if ((s.stats as Partial<Statistics> | undefined)?.petsCaptured === undefined) {
+          stats.petsCaptured = (s.pets ?? []).length;
+        }
         const worldBoss = s.worldBoss ? checkRotate(s.worldBoss, Date.now()) : initialWorldBoss();
         const pets = (s.pets ?? []).map(normalizePet);
         const equips: Record<string, Equipment> = {};
@@ -269,6 +273,9 @@ export const useGameStore = create<GameStore>()(
         let inventory = state.inventory;
         let activityProgress = state.activityProgress;
         let levelUps = 0;
+        // 成就统计同源：在线活动金币/产出物也计入累计口径（与离线结算一致）
+        let roundGold = 0;
+        let roundDrops = 0;
         const xpMult = stateXpMult(state);
         const goldMult = stateGoldMult(state);
 
@@ -286,9 +293,10 @@ export const useGameStore = create<GameStore>()(
               const res = grantSkillXp(skills, act.skillId, r.skillXp, skills.intellect.level, xpMult);
               levelUps += res.levelsGained;
               gems += res.gems;
-              if (r.gold > 0) { gold += Math.round(r.gold * goldMult); }
+              if (r.gold > 0) { const g = Math.round(r.gold * goldMult); gold += g; roundGold += g; }
               if (r.itemId && r.itemQty > 0) {
                 inventory = addItem(inventory, r.itemId, r.itemQty);
+                roundDrops += r.itemQty;
               }
               if (r.gem) { gems += 1; }
             }
@@ -299,6 +307,14 @@ export const useGameStore = create<GameStore>()(
           lastTick: now,
           gold, gems, skills, inventory,
           activityProgress,
+          // 仅在确有收益时写入统计，避免每秒无谓的 stats 对象重建
+          ...(roundGold > 0 || roundDrops > 0 ? {
+            stats: {
+              ...state.stats,
+              totalGoldEarned: state.stats.totalGoldEarned + roundGold,
+              totalDrops: state.stats.totalDrops + roundDrops,
+            },
+          } : {}),
         });
 
         // 定期检查成就（每 5 秒）
@@ -502,6 +518,11 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const eq = state.equips[uid];
         if (!eq) return;
+        // 穿戴中的装备禁止出售（防 UI 之外的路径卖出生效中装备）
+        if (Object.values(state.equipped).some(e => e?.uid === uid)) {
+          get().showToast('已穿戴的装备不可出售，请先卸下');
+          return;
+        }
         const equips = { ...state.equips };
         delete equips[uid];
         const inventory = removeItem(state.inventory, `equip:${uid}`, 1);
@@ -629,8 +650,10 @@ export const useGameStore = create<GameStore>()(
           if (!cur || cur.bestValue < value) {
             achievements[def.id] = { ...(cur ?? { claimed: false, bestValue: 0 }), bestValue: value };
           }
-          if (value >= def.target && !(cur?.claimed)) {
-            achievements[def.id] = { bestValue: value, claimed: true };
+          // 永久成就口径：按高水位（bestValue）判定——进度曾在两次检查之间达标后
+          // 回退（放生灵宠/出售装备等）也不会错失成就
+          if (Math.max(value, cur?.bestValue ?? 0) >= def.target && !(cur?.claimed)) {
+            achievements[def.id] = { bestValue: Math.max(value, cur?.bestValue ?? 0), claimed: true };
             gems += def.gemReward;
             unlockedAny = true;
             get().showToast(`🏆 达成成就【${def.name}】 +${def.gemReward}💎`);
@@ -646,7 +669,8 @@ export const useGameStore = create<GameStore>()(
         const def = ACHIEVEMENTS.find(a => a.id === id);
         const cur = state.achievements[id];
         if (!def || !cur || cur.claimed) return;
-        const value = achievementValue(def.metric, state);
+        // 高水位口径：曾达标即视为达成，当前值回退不拦截领取
+        const value = Math.max(achievementValue(def.metric, state), cur.bestValue ?? 0);
         if (value < def.target) return;
         set({
           achievements: { ...state.achievements, [id]: { bestValue: value, claimed: true } },
@@ -798,8 +822,13 @@ export const useGameStore = create<GameStore>()(
           sect: null,
           titles,
           activeTitle: state.activeTitle?.startsWith('sect_') ? null : state.activeTitle,
+          // 累计贡献入账终身统计（成就口径不因脱离宗门清零）；可消费贡献照旧清零
+          stats: {
+            ...state.stats,
+            sectContribTotal: (state.stats.sectContribTotal ?? 0) + (state.sect.totalContrib ?? 0),
+          },
         });
-        get().showToast('已脱离宗门，贡献清零');
+        get().showToast('已脱离宗门，当前贡献清零（累计贡献已计入成就）');
       },
 
       buySectItem: (itemId) => {
@@ -1042,9 +1071,11 @@ export const useGameStore = create<GameStore>()(
             const pidx = pets.findIndex(p => p.uid === state.activePetUid);
             if (pidx >= 0) {
               const r = grantPetXp(pets[pidx], report.petXp!);
+              // 修复：此前仅在升级时持久化，未升级的离线经验被丢弃
+              pets = [...pets];
+              pets[pidx] = r.pet;
               if (r.levelsGained > 0) {
-                pets = [...pets];
-                pets[pidx] = r.pet;
+                get().showToast(`🐾 ${petDisplayName(r.pet)} 升至 ${r.pet.level} 级！`);
               }
             }
           }
