@@ -16,7 +16,7 @@ export function TopBar() {
   const title = `${rebirthPrefix(rebirthCount)}${getTitle(combatLevelSum(skills))}`;
 
   return (
-    <header className="sticky top-0 z-30 bg-stone-950/80 backdrop-blur-md">
+    <header id="game-topbar" className="sticky top-0 z-30 bg-stone-950/80 backdrop-blur-md">
       <div className="max-w-md mx-auto px-3 py-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">

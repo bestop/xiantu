@@ -52,6 +52,9 @@ export function CombatPanel() {
   const statsRef = useRef<PlayerStats>(playerStats);
   statsRef.current = playerStats;
 
+  // 顶栏实测高度：战斗视图占满 TopBar→BottomNav 之间视口用
+  const [topInset, setTopInset] = useState(56);
+
   useEffect(() => { store.setRegion(regionId); }, [regionId]);
 
   const sync = useCallback(() => {
@@ -196,11 +199,20 @@ export function CombatPanel() {
   // 卸载清理
   useEffect(() => clearTimer, [clearTimer]);
 
-  // 战斗日志自动滚动（仅在日志容器内滚动，不拖动整页）
+  // 战斗日志自动滚动（跟随最后一条日志 id；依赖 length 会在 60 条裁剪后失效）
+  const lastLogId = battle && battle.log.length > 0 ? battle.log[battle.log.length - 1].id : 0;
   useEffect(() => {
     const box = logBoxRef.current;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [battle?.log.length]);
+  }, [lastLogId]);
+
+  // 进入战斗视图时量取顶栏实际高度，使战斗区恰好填满 TopBar→BottomNav 之间
+  const inBattle = !!battle && !!MONSTER_MAP[battle.monsterId];
+  useEffect(() => {
+    if (!inBattle) return;
+    const el = document.getElementById('game-topbar');
+    if (el) setTopInset(el.offsetHeight);
+  }, [inBattle]);
 
   // 战斗内喝药
   const healPills = store.inventory.filter(i => {
@@ -233,16 +245,21 @@ export function CombatPanel() {
 
   // ===== 战斗视图 =====
   if (battle && monster) {
+    // 视口自适应战斗屏：战报区 flex 弹性伸缩并内部滚动，操作按钮钉在底栏上方，
+    // 不再随战报增多而整体下移（inline dvh 优先，旧浏览器回退 vh 类）
     return (
-      <div className="p-3 pb-24 space-y-3">
+      <div
+        style={{ height: `calc(100dvh - ${topInset}px)` }}
+        className="h-[calc(100vh_-_3.5rem)] flex flex-col gap-2 px-3 pt-1.5 pb-[calc(64px_+_env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain"
+      >
         <button onClick={() => { clearTimer(); battleRef.current = null; sync(); }}
-          className="flex items-center gap-1 text-xs text-stone-400 min-h-[36px] px-2">
+          className="shrink-0 flex items-center gap-1 text-xs text-stone-400 min-h-[36px] px-2">
           <ChevronLeft className="w-4 h-4" /> 逃离战斗
         </button>
 
         {/* 此刻所在 · 区域明信片（旅行青蛙式） */}
         {regionScene && (
-          <div className="relative rounded-xl overflow-hidden border border-stone-800 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <div className="relative shrink-0 rounded-xl overflow-hidden border border-stone-800 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
             <img src={regionScene.img} alt={regionScene.name} className="w-full h-28 object-cover" />
             <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
             <div className="absolute bottom-0 inset-x-0 px-3 py-2 flex items-end justify-between">
@@ -258,7 +275,7 @@ export function CombatPanel() {
         )}
 
         {/* 对阵卡 */}
-        <div className="bg-gradient-to-b from-stone-900/90 to-stone-900/70 border border-stone-800 rounded-xl p-4 space-y-4 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+        <div className="shrink-0 bg-gradient-to-b from-stone-900/90 to-stone-900/70 border border-stone-800 rounded-xl p-4 space-y-4 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
           <CombatantCard
             icon="🧙" name={battle.player.name} hp={battle.playerHp} maxHp={battle.player.maxHp}
             atk={battle.player.atk} def={battle.player.def} accent="amber" hitEpoch={battle.playerHitEpoch}
@@ -274,10 +291,10 @@ export function CombatPanel() {
           />
         </div>
 
-        {/* 战斗日志 */}
-        <Section className="!p-0 overflow-hidden">
-          <div ref={logBoxRef} className="max-h-56 overflow-y-auto overscroll-contain p-3 space-y-1 scroll-smooth" aria-live="polite">
-            {battle.log.slice(-14).map(l => (
+        {/* 战斗日志（flex-1 弹性占位 + 内部滚动，高度恒定不推移下方按钮） */}
+        <Section className="!p-0 overflow-hidden flex-1 min-h-[96px] flex flex-col">
+          <div ref={logBoxRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-1 scroll-smooth" aria-live="polite">
+            {battle.log.slice(-30).map(l => (
               <div key={l.id} className={cn('text-xs leading-relaxed animate-in fade-in slide-in-from-left-1 duration-200',
                 l.type === 'player' && 'text-stone-300',
                 l.type === 'crit' && 'text-amber-300 font-semibold',
@@ -293,7 +310,7 @@ export function CombatPanel() {
 
         {/* 药品 + 操作 */}
         {healPills.length > 0 && battle.phase === 'fighting' && (
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="shrink-0 flex gap-1.5 flex-wrap">
             {healPills.map(i => {
               const item = getItem(i.itemId)!;
               const fullHp = battle.playerHp >= battle.player.maxHp;
@@ -309,7 +326,7 @@ export function CombatPanel() {
         )}
 
         {battle.phase === 'fighting' ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="shrink-0 grid grid-cols-2 gap-2">
             <ActionButton variant="ghost" onClick={() => {
               const m = MONSTER_MAP[battle.monsterId];
               clearTimer();
@@ -495,7 +512,7 @@ function BattleResult({ battle, monster, onAgain, onBack }: {
   const won = battle.phase === 'won';
   const r = battle.rewards;
   return (
-    <div className={cn('rounded-xl border p-3 space-y-2',
+    <div className={cn('shrink-0 rounded-xl border p-3 space-y-2',
       won
         ? 'bg-gradient-to-b from-emerald-950/50 to-emerald-950/20 border-emerald-700/80 shadow-[0_0_20px_rgba(16,185,129,0.12)]'
         : 'bg-red-950/40 border-red-900')}>
