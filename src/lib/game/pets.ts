@@ -107,7 +107,14 @@ export function releaseGold(pet: PetInstance): number {
   return Math.round((m.tier * 600 + pet.level * 120) * stageBonus * starBonus);
 }
 
-// 兼容旧存档：补齐 stage / stars 字段
+// 兼容旧存档：补齐 stage / stars 字段，并夹紧越界数值（防损坏/篡改造档属性爆炸）
 export function normalizePet(p: PetInstance): PetInstance {
-  return { ...p, stage: p.stage ?? 0, stars: p.stars ?? 0 };
+  const level = Math.min(MAX_PET_LEVEL, Math.max(1, Math.floor(p.level ?? 1) || 1));
+  return {
+    ...p,
+    level,
+    xp: level >= MAX_PET_LEVEL ? 0 : Math.max(0, Math.floor(p.xp ?? 0) || 0),
+    stage: Math.min(MAX_PET_STAGE, Math.max(0, Math.floor(p.stage ?? 0) || 0)),
+    stars: Math.min(MAX_PET_STARS, Math.max(0, Math.floor(p.stars ?? 0) || 0)),
+  };
 }

@@ -82,6 +82,11 @@ export function OfflineModal() {
               <div className="flex justify-between text-stone-300 py-0.5">
                 <span>金币</span><span className="tabular-nums text-amber-300">+{formatNum(report.battleGold)}</span>
               </div>
+              {(report.petXp ?? 0) > 0 && (
+                <div className="flex justify-between text-stone-300 py-0.5">
+                  <span>🐾 出战灵宠经验</span><span className="tabular-nums text-emerald-300">+{formatNum(report.petXp!)}</span>
+                </div>
+              )}
             </div>
           )}
 

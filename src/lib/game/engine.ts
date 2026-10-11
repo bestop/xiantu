@@ -382,6 +382,13 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
     }
   }
 
+  // 3. 出战灵宠离线经验（与在线胜利 1.2× 同源）
+  let petXp = 0;
+  if (battleKills > 0 && state.activePetUid &&
+      (state.pets ?? []).some(p => p.uid === state.activePetUid)) {
+    petXp = Math.round(battleExp * 1.2);
+  }
+
   if (Object.keys(skillXp).length === 0 && gold === 0 && items.length === 0 && battleKills === 0) {
     return null;
   }
@@ -398,6 +405,7 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
     battleGold,
     battleDrops,
     gems,
+    petXp,
   };
 }
 

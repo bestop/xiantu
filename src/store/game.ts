@@ -350,7 +350,7 @@ export const useGameStore = create<GameStore>()(
             pets = [...pets];
             pets[idx] = pet;
             if (levelsGained > 0) {
-              get().showToast(`🐾 ${monster.name} 升至 ${pet.level} 级！`);
+              get().showToast(`🐾 ${petDisplayName(pet)} 升至 ${pet.level} 级！`);
             }
           }
         }
@@ -1027,6 +1027,7 @@ export const useGameStore = create<GameStore>()(
 
         // 离线战斗
         let sect = state.sect;
+        let pets = state.pets;
         if (report.battleKills > 0) {
           gold += Math.round(report.battleGold * goldMult);
           for (const id of ['hp', 'weaponry', 'power', 'defence', 'speed'] as SkillId[]) {
@@ -1035,6 +1036,17 @@ export const useGameStore = create<GameStore>()(
           }
           for (const d of report.battleDrops) {
             inventory = addItem(inventory, d.itemId, d.qty);
+          }
+          // 出战灵宠离线经验（与在线 1.2× 同源）
+          if ((report.petXp ?? 0) > 0 && state.activePetUid) {
+            const pidx = pets.findIndex(p => p.uid === state.activePetUid);
+            if (pidx >= 0) {
+              const r = grantPetXp(pets[pidx], report.petXp!);
+              if (r.levelsGained > 0) {
+                pets = [...pets];
+                pets[pidx] = r.pet;
+              }
+            }
           }
           // 离线击杀也计入宗门贡献（每 10 杀 +1）
           if (sect) {
@@ -1059,7 +1071,7 @@ export const useGameStore = create<GameStore>()(
 
         set({
           lastTick: now,
-          skills, gems, gold, inventory, equips, stats, sect,
+          skills, gems, gold, inventory, equips, stats, sect, pets,
           pendingOfflineReport: report,
         });
         get().checkAchievements();

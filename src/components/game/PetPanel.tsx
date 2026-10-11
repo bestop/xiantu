@@ -120,8 +120,14 @@ export function PetPanel({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
 
-                <ProgressBar value={pet.xp} max={xpNeed} className="h-1.5"
-                  barClass={isActive ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : 'bg-stone-600'} />
+                {pet.level >= MAX_PET_LEVEL ? (
+                  <div className="h-1.5 flex items-center justify-center bg-amber-950/50 border border-amber-800/50 rounded-full text-[9px] text-amber-300 font-semibold tracking-widest">
+                    ⭐ 已达满级 LV.{MAX_PET_LEVEL}
+                  </div>
+                ) : (
+                  <ProgressBar value={pet.xp} max={xpNeed} className="h-1.5"
+                    barClass={isActive ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : 'bg-stone-600'} />
+                )}
 
                 <div className="flex items-center justify-between gap-2 text-[10px] text-amber-300/90 tabular-nums">
                   <span>出战加成：攻+{formatNum(bonus.atk)} 防+{formatNum(bonus.def)} 血+{formatNum(bonus.hp)}{petMult > 1 && <span className="text-amber-500">（含宗门×{petMult.toFixed(2)}）</span>}</span>

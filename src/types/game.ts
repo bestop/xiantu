@@ -332,6 +332,7 @@ export interface OfflineReport {
   battleGold: number;
   battleDrops: { itemId: string; qty: number }[];
   gems: number;
+  petXp?: number; // 出战灵宠离线经验（旧档报告无此字段）
 }
 
 // ---------- 商店 ----------
