@@ -8,7 +8,7 @@ import { getItem, QUALITY_TEXT, AFFIX_NAMES } from '@/lib/game/items';
 import { FORGE_RECIPES, forgeCostCheck, ForgeRecipe } from '@/lib/game/forge';
 import { formatAffix } from '@/lib/game/items';
 import { ACHIEVEMENTS, achievementValue } from '@/lib/game/achievements';
-import { REGIONS, getMonstersByRegion, TOTAL_MONSTERS } from '@/lib/game/monsters';
+import { REGIONS, getMonstersByRegion, TOTAL_MONSTERS, MONSTERS } from '@/lib/game/monsters';
 import {
   SCENES, isSceneUnlocked, unlockedSceneCount, sceneUnlockHint, SceneKind,
   ALBUM_REWARDS, albumGroupProgress, isAlbumRewardClaimed, isAlbumRewardAvailable,
@@ -292,9 +292,16 @@ function AchievementsView({ onBack }: { onBack: () => void }) {
 }
 
 // ===== 妖兽图鉴 =====
+// 收集数按妖兽总表扫描：卡片记录里若存在陈旧 id（妖兽改名/删减遗留），不计入总数
+export function countCollectedCards(cards: Record<string, number> | undefined): number {
+  if (!cards) return 0;
+  return MONSTERS.reduce((a, m) => a + ((cards[m.id] ?? 0) > 0 ? 1 : 0), 0);
+}
+
 function CodexView({ onBack }: { onBack: () => void }) {
   const store = useGameStore();
-  const collected = Object.keys(store.cards).length;
+  const cards = store.cards ?? {};
+  const collected = countCollectedCards(cards);
   const [regionId, setRegionId] = useState(REGIONS[0].id);
   const monsters = getMonstersByRegion(regionId);
 
@@ -303,20 +310,27 @@ function CodexView({ onBack }: { onBack: () => void }) {
       <SubHeader title={`妖兽图鉴 (${collected}/${TOTAL_MONSTERS})`} onBack={onBack} />
 
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-3 px-3">
-        {REGIONS.map(r => (
-          <button key={r.id} onClick={() => setRegionId(r.id)}
-            className={cn('shrink-0 px-3 py-1.5 rounded-lg text-xs border min-h-[36px] transition-all',
-              regionId === r.id
-                ? 'bg-gradient-to-b from-amber-800/80 to-amber-950/70 border-amber-500/60 text-amber-100'
-                : 'bg-stone-900 border-stone-800 text-stone-400 hover:border-stone-700')}>
-            {r.icon}{r.name}
-          </button>
-        ))}
+        {REGIONS.map(r => {
+          const rms = getMonstersByRegion(r.id);
+          const got = rms.reduce((a, m) => a + ((cards[m.id] ?? 0) > 0 ? 1 : 0), 0);
+          return (
+            <button key={r.id} onClick={() => setRegionId(r.id)}
+              className={cn('shrink-0 px-3 py-1.5 rounded-lg text-xs border min-h-[36px] transition-all',
+                regionId === r.id
+                  ? 'bg-gradient-to-b from-amber-800/80 to-amber-950/70 border-amber-500/60 text-amber-100'
+                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:border-stone-700')}>
+              {r.icon}{r.name}
+              <span className={cn('block text-[9px] tabular-nums', got >= rms.length ? 'text-emerald-400' : 'opacity-70')}>
+                {got}/{rms.length}{got >= rms.length ? ' ✓' : ''}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-3 gap-2">
         {monsters.map(m => {
-          const count = store.cards[m.id] ?? 0;
+          const count = cards[m.id] ?? 0;
           const has = count > 0;
           return (
             <div key={m.id}
@@ -328,6 +342,7 @@ function CodexView({ onBack }: { onBack: () => void }) {
                   : 'bg-stone-950/60 border-stone-800/50')}>
               <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-900/60">
                 <img src={`/monsters/${m.id}.jpg`} alt={has ? m.name : '未知妖兽'} loading="lazy"
+                  onError={e => { e.currentTarget.style.visibility = 'hidden'; }}
                   className={cn('w-full h-full object-cover transition-all duration-300',
                     has ? '' : 'brightness-[0.16] saturate-0 blur-[2px] scale-110')} />
                 {!has && (

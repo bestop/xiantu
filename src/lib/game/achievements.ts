@@ -4,7 +4,7 @@
 
 import { AchievementDef, GameState, SkillId, COMBAT_SKILLS } from '@/types/game';
 import { totalSkillLevel, combatLevelSum } from './skills';
-import { TOTAL_MONSTERS } from './monsters';
+import { TOTAL_MONSTERS, MONSTERS } from './monsters';
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   // ===== 战斗 =====
@@ -95,7 +95,11 @@ export function achievementValue(metric: string, state: GameState): number {
     case 'offlineSessions': return state.stats.offlineSessions;
     case 'totalSkill': return totalSkillLevel(state.skills);
     case 'combatSum': return combatLevelSum(state.skills);
-    case 'cardTypes': return Object.keys(state.cards).length;
+    case 'cardTypes': {
+      // 与图鉴同口径：按妖兽总表扫描，陈旧卡片 id 不计数
+      const cards = state.cards ?? {};
+      return MONSTERS.reduce((a, m) => a + ((cards[m.id] ?? 0) > 0 ? 1 : 0), 0);
+    }
     case 'pets': return (state.pets ?? []).length;
     case 'bestPetLevel': return Math.max(0, ...(state.pets ?? []).map(p => p.level));
     case 'petMaxStage': return Math.max(0, ...(state.pets ?? []).map(p => p.stage ?? 0));
