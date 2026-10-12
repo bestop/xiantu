@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useGameStore } from '@/store/game';
 import {
   SECTS, SECT_MAP, getSectMembers, getSectShopEntries, sectRank,
-  sectScaleHint, SECT_RANKS,
+  sectScaleHint, SECT_RANKS, todayKey,
 } from '@/lib/game/sects';
 import { getItem } from '@/lib/game/items';
 import { Section, ActionButton, formatNum, ProgressBar } from './ui-bits';
@@ -129,8 +129,9 @@ function SectHome({ confirmLeave, setConfirmLeave, flash }: {
               <div className="text-xs text-amber-300 font-semibold tabular-nums">{formatNum(sect.totalContrib)}</div>
             </div>
             <div className="bg-stone-900/70 rounded-lg py-1.5">
+              {/* 跨天日切：dayKey 非今日时在线跨午夜尚未产生新贡献，不显示昨日残留 */}
               <div className="text-[9px] text-stone-500">今日贡献</div>
-              <div className="text-xs text-amber-300 font-semibold tabular-nums">{formatNum(sect.dayContrib)}</div>
+              <div className="text-xs text-amber-300 font-semibold tabular-nums">{formatNum(sect.dayKey === todayKey() ? sect.dayContrib : 0)}</div>
             </div>
           </div>
           <div className="mt-2.5 text-[11px] text-stone-300">

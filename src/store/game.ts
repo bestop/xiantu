@@ -199,6 +199,24 @@ function normalizeWorldBoss(wb: WorldBossState): WorldBossState {
   return checkRotate({ ...wb, bossIdx, hp, seasonDamage, spawnedAt, lastChallengeAt, killed: !!wb.killed }, Date.now());
 }
 
+// 宗门状态规范化（旧档兼容 + 跨天贡献日切）
+// - dayKey 非今日：今日贡献归零并刷到今日（跨天离线后昨日 dayContrib 不再残留）
+// - 旧档缺 dayKey/dayContrib 字段：兜底 0，避免面板 formatNum(undefined) 显示 NaN
+function normalizeSect(sect: PlayerSectState | null | undefined, now: number): PlayerSectState | null {
+  if (!sect || typeof sect.sectId !== 'string') return null;
+  const num = (v: unknown): number =>
+    Number.isFinite(v) && (v as number) > 0 ? Math.floor(v as number) : 0;
+  const key = todayKey(now);
+  const isToday = sect.dayKey === key;
+  return {
+    ...sect,
+    contribution: num(sect.contribution),
+    totalContrib: num(sect.totalContrib),
+    dayKey: key,
+    dayContrib: isToday ? num(sect.dayContrib) : 0,
+  };
+}
+
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
@@ -237,8 +255,10 @@ export const useGameStore = create<GameStore>()(
           hydrated: true, stats, worldBoss, pets, equips, rebirth, skills,
           titles: tn.titles, activeTitle: tn.activeTitle,
           albumClaims: s.albumClaims ?? [],
-          sect: s.sect ?? null,
+          sect: normalizeSect(s.sect, now),
           activeBuffs: buffs,
+          // 已入账的离线报告不持久化：刷新后不再重弹旧报告（收益已在入账时落定）
+          pendingOfflineReport: null,
         });
         get().syncAutoTitles(true);
         get().settleOffline();
@@ -1144,9 +1164,9 @@ export const useGameStore = create<GameStore>()(
       name: 'xiantu-idle-save-v1',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => {
-        const { hydrated, toast, toastSeq, ...rest } = state;
-        void hydrated; void toast; void toastSeq;
-        return rest as GameState & { pendingOfflineReport: OfflineReport | null };
+        const { hydrated, toast, toastSeq, pendingOfflineReport, ...rest } = state;
+        void hydrated; void toast; void toastSeq; void pendingOfflineReport;
+        return rest as Omit<GameState, 'pendingOfflineReport'>;
       },
       onRehydrateStorage: () => (state) => {
         // 水合完成后标记
