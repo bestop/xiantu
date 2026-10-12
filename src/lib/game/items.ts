@@ -325,20 +325,6 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
     description: '10 分钟内防御 +40%。',
   },
   {
-    id: 'cook_heal_l', name: '九转还魂丹', icon: '💗', kind: 'cooking',
-    outputItemId: 'pill_heal_l',
-    materials: [{ itemId: 'herb_3', qty: 2 }, { itemId: 'core_1', qty: 2 }],
-    skillXp: 140, minSkillLevel: 50,
-    description: '恢复 1600 点气血的顶级丹药。',
-  },
-  {
-    id: 'cook_exp', name: '悟道丹', icon: '🌟', kind: 'cooking',
-    outputItemId: 'pill_exp',
-    materials: [{ itemId: 'herb_4', qty: 1 }, { itemId: 'core_1', qty: 3 }],
-    skillXp: 260, minSkillLevel: 70,
-    description: '五项战斗技能各获得 600 经验。',
-  },
-  {
     id: 'cook_spd', name: '疾风丹', icon: '💨', kind: 'cooking',
     outputItemId: 'pill_spd',
     materials: [{ itemId: 'herb_1', qty: 3 }, { itemId: 'herb_2', qty: 1 }],
@@ -360,11 +346,27 @@ export const CRAFT_RECIPES: CraftRecipe[] = [
     description: '10 分钟内气运 +15，掉落品质与概率双提升。',
   },
   {
+    id: 'cook_heal_l', name: '九转还魂丹', icon: '💗', kind: 'cooking',
+    outputItemId: 'pill_heal_l',
+    // 数值修复：此前 herb_3×2+core_1×2 材料价值 840 金 > 产出卖价 800，
+    // 是全配方表唯一炼了必亏的配方；降为 herb_3×1 后成本 540，与同级配方利润率对齐
+    materials: [{ itemId: 'herb_3', qty: 1 }, { itemId: 'core_1', qty: 2 }],
+    skillXp: 140, minSkillLevel: 50,
+    description: '恢复 1600 点气血的高级丹药。',
+  },
+  {
     id: 'cook_cap', name: '捕灵丹', icon: '🪤', kind: 'cooking',
     outputItemId: 'pill_cap',
     materials: [{ itemId: 'herb_3', qty: 1 }, { itemId: 'herb_1', qty: 5 }],
     skillXp: 150, minSkillLevel: 55,
     description: '10 分钟内灵宠捕获率 ×1.6，收妖必备。',
+  },
+  {
+    id: 'cook_exp', name: '悟道丹', icon: '🌟', kind: 'cooking',
+    outputItemId: 'pill_exp',
+    materials: [{ itemId: 'herb_4', qty: 1 }, { itemId: 'core_1', qty: 3 }],
+    skillXp: 260, minSkillLevel: 70,
+    description: '五项战斗技能各获得 600 经验。',
   },
   {
     id: 'cook_heal_xl', name: '万年雪参膏', icon: '💖', kind: 'cooking',

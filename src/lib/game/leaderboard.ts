@@ -49,8 +49,13 @@ export function computePowerScore(state: GameState): number {
 // NPC 实力与玩家游玩时长绑定：随玩家成长而成长，保证可追赶、可反超
 function npcPower(i: number, hoursOfPlay: number): number {
   const base = 140 + i * i * 2.2 + i * 45;   // 初始分差分布（越靠前越强）
-  const rate = 5 + (i % 7) * 2.4;            // 每小时成长 5~19.4
-  return Math.round(base + rate * hoursOfPlay);
+  // 按自身基数乘性成长 1.30% ~ 1.01%/h（越靠前成长越慢）。
+  // 修复：此前成长率按 i%7 轮换加性叠加（5~19.4/h），第 3 名 19.4/h 远快于第 1 名
+  // 7.4/h，约 28 小时后中游 NPC 即反超登顶，天梯次序随时间翻转、与"越靠前越强"矛盾。
+  // 乘性成长下翻转条件为 r_i/r_j > base_j/base_i；相邻最小基数比 1.337 远大于
+  // 最大成长率比 1.008，数学上永不翻转，且头部长期保持可追赶的线性外推节奏。
+  const rate = (130 - i) / 100; // %/h
+  return Math.round(base * (1 + (hoursOfPlay * rate) / 100));
 }
 
 export function getLeaderboard(state: GameState): { entries: LeaderEntry[]; playerRank: number } {

@@ -317,19 +317,33 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
       if (rounds > 0) {
         skillXp[act.skillId] = (skillXp[act.skillId] ?? 0) + rounds * act.skillXp;
         if (act.reward.gold) {
-          gold += rounds * act.reward.gold;
+          // 化缘金币与在线同源：随化缘等级成长（修复：此前离线固定 25/轮，
+          // 高等级化缘离线收益仅在线的两成）
+          gold += rounds * (act.id === 'begging' ? beggingGoldPerRound(state) : act.reward.gold);
         }
         if (act.reward.itemId) {
-          // 动态物品：采矿/垂钓/寻宝按技能阶级产出
-          const itemId = resolveDynamicItemId(act.id, state);
-          if (itemId) {
-            items.push({ itemId, qty: rounds * (act.reward.itemQty ?? 1) });
-          }
-          // 寻宝额外：材料随机 + 小概率装备由前端结算（简化为材料+金币）
+          // 寻宝：按在线同源概率拆分宝藏轮次 + 小概率装备由前端结算（简化为材料+金币）
           if (act.id === 'archaeology') {
             gold += rounds * Math.round(30 * (1 + (state.skills.archaeology?.level ?? 0) * 0.5));
             const gemRounds = Math.floor(rounds * (act.reward.gemChance ?? 0));
             gems += gemRounds;
+            // 修复：此前整场仅 roll 一次宝藏类型、全部轮次押同一产出，
+            // roll 到残卷 ≈ 期望 3 倍、roll 到灵芝仅 1/8，方差爆炸且与在线逐轮结算不一致
+            const nGold = Math.round(rounds * 0.45);   // 古币（含末段 5% 兜底）
+            const nJade = Math.round(rounds * 0.30);   // 古玉
+            const nScroll = Math.round(rounds * 0.15); // 残卷
+            const nHerb = Math.max(0, rounds - nGold - nJade - nScroll); // 灵芝
+            if (nGold > 0) items.push({ itemId: 'trea_gold', qty: nGold });
+            if (nJade > 0) items.push({ itemId: 'trea_jade', qty: nJade });
+            if (nScroll > 0) items.push({ itemId: 'trea_scroll', qty: nScroll });
+            if (nHerb > 0) items.push({ itemId: 'herb_2', qty: nHerb });
+          } else {
+            // 动态物品：采矿/垂钓按技能阶级产出（离线期间等级在结算末尾才应用，
+            // 按开始时阶级整场产出，属可接受简化）
+            const itemId = resolveDynamicItemId(act.id, state);
+            if (itemId) {
+              items.push({ itemId, qty: rounds * (act.reward.itemQty ?? 1) });
+            }
           }
         }
       }
@@ -434,6 +448,12 @@ export function resolveDynamicItemId(activityId: ActivityId, state: GameState): 
   return null;
 }
 
+// 化缘每轮金币（在线/离线同源）：25 × (1 + 化缘等级 × 6%)
+export function beggingGoldPerRound(state: GameState): number {
+  const base = ACTIVITY_MAP['begging'].reward.gold ?? 25;
+  return Math.round(base * (1 + (state.skills.begging?.level ?? 0) * 0.06));
+}
+
 // 在线 tick 结算一次活动轮次
 export function activityRoundReward(activityId: ActivityId, state: GameState): {
   skillXp: number; gold: number; itemId?: string; itemQty: number; gem: boolean;
@@ -456,8 +476,8 @@ export function activityRoundReward(activityId: ActivityId, state: GameState): {
     gold += Math.round(30 * (1 + (state.skills.archaeology?.level ?? 0) * 0.5));
   }
   if (activityId === 'begging') {
-    // 化缘随等级成长
-    gold = Math.round((act.reward.gold ?? 25) * (1 + (state.skills.begging?.level ?? 0) * 0.06));
+    // 化缘随等级成长（与离线结算共用 beggingGoldPerRound，保证同源）
+    gold = beggingGoldPerRound(state);
   }
 
   return { skillXp, gold, itemId, itemQty, gem };
