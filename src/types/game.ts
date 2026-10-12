@@ -139,12 +139,6 @@ export interface Equipment {
   refine: number; // 炼器等级 0-10（旧存档默认 0）
 }
 
-// 怪物卡片（收集要素）
-export interface MonsterCardItem {
-  id: string; // monsterId
-  count: number;
-}
-
 // 背包物品条目
 export interface InvItem {
   itemId: string;   // BaseItem.id 或 'equip:<uid>'
