@@ -12,6 +12,7 @@ import { SkillsPanel } from '@/components/game/SkillsPanel';
 import { InventoryPanel } from '@/components/game/InventoryPanel';
 import { MorePanel } from '@/components/game/MorePanel';
 import { OfflineModal } from '@/components/game/OfflineModal';
+import { EventModal } from '@/components/game/EventModal';
 import { StartScreen } from '@/components/game/StartScreen';
 
 // 客户端挂载检测（避免 SSR 水合不一致，且不触发 effect 内 setState）
@@ -84,6 +85,7 @@ function GameShell() {
         <BottomNav />
       </div>
       <OfflineModal />
+      <EventModal />
     </div>
   );
 }

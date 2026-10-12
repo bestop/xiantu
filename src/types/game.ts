@@ -107,8 +107,8 @@ export type EquipSlot = 'weapon' | 'armor' | 'accessory';
 export type AffixKey = 'atk' | 'def' | 'hp' | 'crit' | 'dodge' | 'luck' | 'speed';
 
 // 丹药临时 buff：value 语义随 key 变化 ——
-// atk/def/spd/gold：百分比 +30 → 乘区 1.30；luck：气运面板值 +15；cap：捕获率乘区 ×100（如 160 → ×1.6）
-export type ActiveBuffKey = 'atk' | 'def' | 'spd' | 'gold' | 'luck' | 'cap';
+// atk/def/spd/gold/exp：百分比 +30 → 乘区 1.30；luck：气运面板值 +15；cap：捕获率乘区 ×100（如 160 → ×1.6）
+export type ActiveBuffKey = 'atk' | 'def' | 'spd' | 'gold' | 'luck' | 'cap' | 'exp';
 
 export interface ActiveBuff {
   key: ActiveBuffKey;
@@ -240,6 +240,7 @@ export interface Statistics {
   wbKills: number;       // 世界 BOSS 击杀数
   wbBestDamage: number;  // 单次挑战最高伤害
   wbSlain?: string[];    // 已首次击杀过的世界 BOSS 名（限定称号依据）
+  encounters?: number;   // 累计触发奇遇次数（v5 新增，旧档缺省 0）
 }
 
 // ---------- 宠物 ----------
@@ -340,6 +341,56 @@ export interface ShopEntry {
   stock: number; // -1 无限
 }
 
+// ---------- 奇遇 ----------
+
+// 宝箱选项奖励（领取时解析）：gold/gems 直入账；itemId+qty 入包；equipTier 生成随机装备（minQuality 保底品质）
+export interface EncounterReward {
+  gold?: number;
+  gems?: number;
+  itemId?: string;
+  qty?: number;
+  equipTier?: number;
+  minQuality?: ItemQuality;
+}
+
+export interface EncounterOption {
+  id: string;
+  icon: string;
+  label: string;
+  desc: string;
+  reward: EncounterReward;
+}
+
+// 神秘商人限时商品（原价 5 折）
+export interface MerchantItem {
+  key: string;
+  icon: string;
+  label: string;
+  price: number;
+  currency: 'gold' | 'gem';
+  itemId?: string;
+  qty?: number;
+  equipTier?: number;
+  minQuality?: ItemQuality;
+}
+
+// 进行中的奇遇：宝箱（三选一，10 分钟内有效）或神秘商人（90s 限时）
+export interface EncounterState {
+  kind: 'treasure' | 'merchant';
+  createdAt: number;
+  expireAt: number;
+  options?: EncounterOption[];
+  items?: MerchantItem[];
+}
+
+// ---------- 每日签到 ----------
+
+export interface DailiesState {
+  lastDay: string; // 最后一次签到日（YYYY-MM-DD）；'' 未签过
+  streak: number;  // 连续签到天数
+  best: number;    // 最长连续签到
+}
+
 // ---------- 游戏主状态 ----------
 
 export type TabId = 'home' | 'combat' | 'skills' | 'inventory' | 'more';
@@ -397,6 +448,16 @@ export interface GameState {
 
   // 更多面板当前子视图（供跨面板跳转）
   moreView: MoreViewId;
+
+  // 奇遇（进行中的宝箱/神秘商人；无则 null）
+  encounter: EncounterState | null;
+  // 上次奇遇触发时间（冷却节流，防连续弹窗打断）
+  lastEncounterAt: number;
+  // 连胜（在线战斗：胜 +1 败清零；每 10 连胜发里程碑奖励）
+  winStreak: number;
+  bestWinStreak: number;
+  // 每日签到
+  dailies: DailiesState;
 
   // 离线报告（有内容时弹窗）
   pendingOfflineReport: OfflineReport | null;

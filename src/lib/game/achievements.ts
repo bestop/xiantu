@@ -70,6 +70,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'rebirth_1', name: '轮回初醒', icon: '☸️', description: '首次转生', metric: 'rebirths', target: 1, gemReward: 50 },
   { id: 'rebirth_3', name: '三世轮回', icon: '☯️', description: '转生 3 次', metric: 'rebirths', target: 3, gemReward: 120 },
 
+  // ===== 奇遇 =====
+  { id: 'encounter_1', name: '初遇机缘', icon: '🏮', description: '首次触发奇遇', metric: 'encounters', target: 1, gemReward: 10 },
+  { id: 'encounter_10', name: '机缘连连', icon: '🎏', description: '累计触发 10 次奇遇', metric: 'encounters', target: 10, gemReward: 25 },
+  { id: 'encounter_40', name: '气运加身', icon: '🧧', description: '累计触发 40 次奇遇', metric: 'encounters', target: 40, gemReward: 60 },
+
   // ===== 世界 BOSS =====
   { id: 'wb_1', name: '世界之敌', icon: '🐍', description: '首次击杀世界 BOSS', metric: 'wbKills', target: 1, gemReward: 15 },
   { id: 'wb_4', name: '诸神黄昏', icon: '💀', description: '累计击杀 4 只世界 BOSS', metric: 'wbKills', target: 4, gemReward: 40 },
@@ -111,6 +116,8 @@ export function achievementValue(metric: string, state: GameState): number {
     case 'sectContrib':
       return (state.stats.sectContribTotal ?? 0) + (state.sect?.totalContrib ?? 0);
     case 'rebirths': return state.rebirth?.count ?? 0;
+    // 奇遇累计触发次数（stats.encounters，宝箱/商人/灵气/灵兽四类同口径）
+    case 'encounters': return state.stats.encounters ?? 0;
     case 'wbKills': return state.stats.wbKills ?? 0;
     case 'wbUnique': return (state.stats.wbSlain ?? []).length;
     case 'wbBestDamage': return state.stats.wbBestDamage ?? 0;

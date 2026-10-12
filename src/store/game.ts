@@ -15,8 +15,12 @@ import { ACTIVITY_MAP, xpToNext, gatherTier, combatLevelSum, pillMultiplier } fr
 import {
   computePlayerStats, grantSkillXp, computeOfflineReport, resolveDynamicItemId,
   activityRoundReward, pendingOfflineEquips, getShopEntries, openEquipBag,
-  stateXpMult, stateGoldMult,
+  stateXpMult, stateGoldMult, avgCombatLevel,
 } from '@/lib/game/engine';
+import {
+  ENCOUNTER_BATTLE_CHANCE, ENCOUNTER_ACTIVITY_CHANCE, ENCOUNTER_COOLDOWN_MS,
+  rollEncounterDraw, dailyGold, DAILY_GEMS, DAILY_STREAK_BONUS_GEMS,
+} from '@/lib/game/events';
 import { getItem, generateEquipment, genUid, CRAFT_RECIPES, rollQuality } from '@/lib/game/items';
 import { MONSTER_MAP } from '@/lib/game/monsters';
 import { ACHIEVEMENTS, achievementValue } from '@/lib/game/achievements';
@@ -86,6 +90,11 @@ const initialState: GameState = {
   titles: [],
   activeTitle: null,
   moreView: 'root',
+  encounter: null,
+  lastEncounterAt: 0,
+  winStreak: 0,
+  bestWinStreak: 0,
+  dailies: { lastDay: '', streak: 0, best: 0 },
   pendingOfflineReport: null,
 };
 
@@ -159,6 +168,12 @@ export interface GameStore extends GameState {
 
   // 更多面板子视图
   setMoreView: (v: MoreViewId) => void;
+
+  // 奇遇（战斗胜利/挂机轮次概率触发；宝箱三选一/神秘商人/临时增益）
+  tryTriggerEncounter: (source: 'battle' | 'activity') => void;
+  claimEncounter: (optionId: string) => void;
+  dismissEncounter: () => void;
+  buyEncounterItem: (key: string) => string | null;
 
   // 离线
   settleOffline: () => void;
@@ -255,11 +270,24 @@ export const useGameStore = create<GameStore>()(
           if (cur && equips[cur.uid]) equipped[slot] = equips[cur.uid];
         }
         const rebirth = normalizeRebirth(s.rebirth);
+        const now = Date.now();
+        // 奇遇/连胜/签到旧档兼容（缺字段兑底；未知类型或已过期的奇遇直接清理）
+        const encounter = s.encounter
+          && (s.encounter.kind === 'treasure' || s.encounter.kind === 'merchant')
+          && s.encounter.expireAt > now
+          ? s.encounter
+          : null;
+        const winStreak = Math.max(0, Math.floor(s.winStreak ?? 0) || 0);
+        const bestWinStreak = Math.max(winStreak, Math.max(0, Math.floor(s.bestWinStreak ?? 0) || 0));
+        const dailies = {
+          lastDay: typeof s.dailies?.lastDay === 'string' ? s.dailies.lastDay : '',
+          streak: Math.max(0, Math.floor(s.dailies?.streak ?? 0) || 0),
+          best: Math.max(0, Math.floor(s.dailies?.best ?? 0) || 0),
+        };
         // 旧档兼容：技能表新增 id 时从初始值补齐，避免 skills.focus.level 等直接访问 undefined 崩溃
         const skills = { ...emptySkills(), ...(s.skills ?? {}) };
         const tn = normalizeTitles(s);
         // 旧存档 buff 迁移：activeBattleBuffAtk/buffExpireAt → activeBuffs（并丢弃已过期）
-        const now = Date.now();
         let buffs: ActiveBuff[] = (s.activeBuffs ?? []).filter(b => b && b.expireAt > now);
         const legacyAtk = (s as unknown as { activeBattleBuffAtk?: number }).activeBattleBuffAtk ?? 0;
         const legacyExpire = (s as unknown as { buffExpireAt?: number }).buffExpireAt ?? 0;
@@ -268,6 +296,7 @@ export const useGameStore = create<GameStore>()(
         }
         set({
           hydrated: true, stats, worldBoss, pets, equips, equipped, rebirth, skills, activePetUid,
+          encounter, lastEncounterAt: s.lastEncounterAt ?? 0, winStreak, bestWinStreak, dailies,
           titles: tn.titles, activeTitle: tn.activeTitle,
           albumClaims: s.albumClaims ?? [],
           sect: normalizeSect(s.sect, now),
@@ -333,8 +362,29 @@ export const useGameStore = create<GameStore>()(
         // 成就统计同源：在线活动金币/产出物也计入累计口径（与离线结算一致）
         let roundGold = 0;
         let roundDrops = 0;
+        let roundsDone = 0;
         const xpMult = stateXpMult(state);
         const goldMult = stateGoldMult(state);
+
+        // 每日签到：跨天首秒发放（昨日衔接则连签 +1，否则重置为第 1 天；每满 7 天额外奖励）
+        let dailies = state.dailies;
+        const tKey = todayKey(now);
+        if (dailies.lastDay !== tKey) {
+          const yesterday = todayKey(now - 86_400_000);
+          const streak = dailies.lastDay === yesterday ? dailies.streak + 1 : 1;
+          const bonus = streak % 7 === 0 ? DAILY_STREAK_BONUS_GEMS : 0;
+          dailies = { lastDay: tKey, streak, best: Math.max(dailies.best, streak) };
+          gems += DAILY_GEMS + bonus;
+          gold += dailyGold(avgCombatLevel(state));
+          // 延迟到 set 后 toast（下方统一处理）
+          setTimeout(() => get().showToast(`📅 每日签到 第 ${streak} 天：+${DAILY_GEMS + bonus}💎${bonus > 0 ? `（连签 ${streak} 天额外 +${bonus}💎）` : ''}`), 50);
+        }
+
+        // 过期奇遇清理（宝箱 10 分钟未选 / 商人 90 秒离场）
+        const encounter = state.encounter && state.encounter.expireAt > now ? state.encounter : null;
+        if (encounter !== state.encounter) {
+          set({ encounter });
+        }
 
         // 活动推进（基于真实时间差，兼容后台限流）
         if (state.activeActivity) {
@@ -345,6 +395,7 @@ export const useGameStore = create<GameStore>()(
             while (activityProgress >= 1 && guard < 60) {
               activityProgress -= 1;
               guard++;
+              roundsDone = guard;
               // 结算一轮
               const r = activityRoundReward(state.activeActivity, state);
               const res = grantSkillXp(skills, act.skillId, r.skillXp, skills.intellect.level, xpMult);
@@ -364,6 +415,7 @@ export const useGameStore = create<GameStore>()(
           lastTick: now,
           gold, gems, skills, inventory,
           activityProgress,
+          dailies,
           // 仅在确有收益时写入统计，避免每秒无谓的 stats 对象重建
           ...(roundGold > 0 || roundDrops > 0 ? {
             stats: {
@@ -373,6 +425,11 @@ export const useGameStore = create<GameStore>()(
             },
           } : {}),
         });
+
+        // 挂机活动轮次完成 → 小概率触发奇遇（占用/冷却检查在 action 内）
+        if (roundsDone > 0) {
+          get().tryTriggerEncounter('activity');
+        }
 
         // 定期检查成就（每 5 秒）
         if (Math.floor(now / 1000) % 5 === 0 || levelUps > 0) {
@@ -462,7 +519,16 @@ export const useGameStore = create<GameStore>()(
         }
 
         const goldGain = won ? Math.round(rewards.gold * stateGoldMult(state)) : 0;
-        const gold = state.gold + goldGain;
+        // 连胜：胜 +1 败清零（在线战斗专属，离线不累计）；每 10 连胜发里程碑奖励
+        const winStreak = won ? state.winStreak + 1 : 0;
+        const bestWinStreak = Math.max(state.bestWinStreak ?? 0, winStreak);
+        let streakGold = 0;
+        let streakGems = 0;
+        if (won && winStreak % 10 === 0) {
+          streakGold = Math.round(500 * (1 + avgCombatLevel(state) * 0.1));
+          streakGems = 3;
+        }
+        const gold = state.gold + goldGain + streakGold;
 
         // 宗门贡献：胜利 +1，妖王 +10
         let sect = state.sect;
@@ -482,7 +548,16 @@ export const useGameStore = create<GameStore>()(
           petsCaptured: (state.stats.petsCaptured ?? 0) + petsCaptured,
         };
 
-        set({ skills, gems, inventory, equips, cards, gold, stats, pets, sect });
+        set({ skills, gems: gems + streakGems, inventory, equips, cards, gold, stats, pets, sect, winStreak, bestWinStreak });
+        if (won) {
+          // 奇遇：战斗胜利小概率触发（冷却/占用检查在 action 内）
+          get().tryTriggerEncounter('battle');
+          if (streakGems > 0) {
+            get().showToast(`🔥 连胜 ${winStreak}！里程碑奖励：+${formatNum(streakGold)} 金币 +${streakGems}💎`);
+          }
+        } else if (state.winStreak >= 10) {
+          get().showToast(`💔 连胜终结（${state.winStreak} 连胜）。重整旗鼓，再战！`);
+        }
         get().checkAchievements();
       },
 
@@ -1087,6 +1162,107 @@ export const useGameStore = create<GameStore>()(
       },
 
       setMoreView: (v) => set({ moreView: v }),
+
+      // ---------- 奇遇 ----------
+      tryTriggerEncounter: (source) => {
+        const state = get();
+        const now = Date.now();
+        const chance = source === 'battle' ? ENCOUNTER_BATTLE_CHANCE : ENCOUNTER_ACTIVITY_CHANCE;
+        if (Math.random() >= chance) return;
+        // 已有奇遇未处理/未过期时不叠加；冷却节流（3 分钟内最多一次）
+        if (state.encounter && state.encounter.expireAt > now) return;
+        if (now < (state.lastEncounterAt ?? 0) + ENCOUNTER_COOLDOWN_MS) return;
+        const draw = rollEncounterDraw(avgCombatLevel(state), now);
+        const stats = { ...state.stats, encounters: (state.stats.encounters ?? 0) + 1 };
+        if (draw.kind === 'qi') {
+          // 同系 buff 刷新（不重复叠加灵气爆发）
+          const buffs = [...(state.activeBuffs ?? []).filter(b => b.key !== 'exp'), draw.buff];
+          set({ activeBuffs: buffs, lastEncounterAt: now, stats });
+          get().showToast('🌟 奇遇·灵气爆发！120 秒内技能经验翻倍');
+          return;
+        }
+        if (draw.kind === 'beast') {
+          const buffs = [...(state.activeBuffs ?? []).filter(b => b.key !== 'cap'), draw.buff];
+          set({ activeBuffs: buffs, lastEncounterAt: now, stats });
+          get().showToast('🐾 奇遇·灵兽低语！120 秒内灵宠捕获率 ×3');
+          return;
+        }
+        // 宝箱/神秘商人：写入状态，EventModal 监听弹出
+        set({ encounter: draw.state, lastEncounterAt: now, stats });
+      },
+
+      claimEncounter: (optionId) => {
+        const state = get();
+        const enc = state.encounter;
+        if (!enc || enc.kind !== 'treasure' || !enc.options) return;
+        const opt = enc.options.find(o => o.id === optionId);
+        if (!opt) return;
+        let gold = state.gold;
+        let gems = state.gems;
+        let inventory = state.inventory;
+        let equips = { ...state.equips };
+        const r = opt.reward;
+        let eqName: string | null = null;
+        if (r.gold) gold += r.gold;
+        if (r.gems) gems += r.gems;
+        if (r.itemId && r.qty) inventory = addItem(inventory, r.itemId, r.qty);
+        if (r.equipTier) {
+          // openEquipBag 自带品质保底（≥rare / legendary）
+          const eq = openEquipBag(r.equipTier, r.minQuality === 'legendary' ? 'legendary' : 'rare');
+          equips[eq.uid] = eq;
+          inventory = addItem(inventory, `equip:${eq.uid}`, 1);
+          eqName = eq.name;
+        }
+        set({ gold, gems, inventory, equips, encounter: null });
+        if (eqName) get().showToast(`🎁 开匣获得【${eqName}】！`);
+        else if (r.gold) get().showToast(`💰 天降横财：+${formatNum(r.gold)} 金币！`);
+        else if (r.gems) get().showToast(`💎 天降仙晶：+${r.gems}！`);
+        else if (r.itemId) {
+          const item = getItem(r.itemId);
+          get().showToast(`🧧 获得 ${item?.icon ?? ''}${item?.name ?? r.itemId} ×${r.qty}！`);
+        }
+        get().checkAchievements();
+      },
+
+      dismissEncounter: () => set({ encounter: null }),
+
+      buyEncounterItem: (key) => {
+        const state = get();
+        const enc = state.encounter;
+        if (!enc || enc.kind !== 'merchant' || !enc.items) return '商人已离开';
+        if (enc.expireAt <= Date.now()) {
+          set({ encounter: null });
+          return '商人已离开';
+        }
+        const item = enc.items.find(i => i.key === key);
+        if (!item) return '商品不存在';
+        const short = item.currency === 'gold' ? '金币不足' : '宝石不足';
+        if (item.currency === 'gold' ? state.gold < item.price : state.gems < item.price) return short;
+
+        let inventory = state.inventory;
+        let equips = { ...state.equips };
+        let eqName: string | null = null;
+        if (item.itemId) inventory = addItem(inventory, item.itemId, item.qty ?? 1);
+        if (item.equipTier) {
+          const eq = item.minQuality === 'legendary'
+            ? generateEquipment(item.equipTier, 'legendary')
+            : openEquipBag(item.equipTier, 'rare');
+          equips[eq.uid] = eq;
+          inventory = addItem(inventory, `equip:${eq.uid}`, 1);
+          eqName = eq.name;
+        }
+        // 买走的商品从货架上移除；剩余商品继续保留至到期
+        const items = enc.items.filter(i => i.key !== key);
+        set({
+          gold: item.currency === 'gold' ? state.gold - item.price : state.gold,
+          gems: item.currency === 'gem' ? state.gems - item.price : state.gems,
+          inventory, equips,
+          encounter: { ...enc, items },
+        });
+        get().showToast(eqName ? `🧳 购得【${eqName}】！` : `🧳 购得 ${item.label}！`);
+        get().checkAchievements();
+        return null;
+      },
 
       // ---------- 离线 ----------
       settleOffline: () => {

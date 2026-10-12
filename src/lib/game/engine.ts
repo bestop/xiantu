@@ -62,7 +62,7 @@ export function activeBuffFlat(state: GameState, key: ActiveBuffKey): number {
   return sum;
 }
 
-// 技能经验额外乘区：转生点数（+1%/点） + 宗门剑修加成（含宗门等级）
+// 技能经验额外乘区：转生点数（+1%/点） + 宗门剑修加成（含宗门等级） + 灵气爆发奇遇 buff
 export function stateXpMult(state: GameState): number {
   const points = state.rebirth?.points ?? 0;
   let mult = 1 + points * BONUS_XP_PER_POINT;
@@ -70,6 +70,8 @@ export function stateXpMult(state: GameState): number {
     const { level } = getSectMembers(state);
     mult += 0.12 + sectLevelBonus(level);
   }
+  // 灵气爆发奇遇：限时经验 +100%（activeBuffMult 对过期 buff 自动免疫）
+  mult *= activeBuffMult(state, 'exp');
   return mult;
 }
 

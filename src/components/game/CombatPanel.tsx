@@ -37,6 +37,7 @@ const BUFF_META: Record<ActiveBuffKey, { name: string; icon: string }> = {
   gold: { name: '金币', icon: '🪙' },
   luck: { name: '气运', icon: '🍀' },
   cap: { name: '捕获', icon: '🪤' },
+  exp: { name: '经验', icon: '🌟' },
 };
 
 export function CombatPanel() {
@@ -348,6 +349,15 @@ export function CombatPanel() {
   // ===== 区域/怪物选择视图 =====
   return (
     <div className="p-3 pb-24 space-y-3">
+      {/* 连胜状态：每 10 连胜发放里程碑奖励（在线战斗专属） */}
+      {store.winStreak > 0 && (
+        <div className="flex items-center justify-between bg-gradient-to-r from-red-950/40 to-stone-900/60 border border-red-900/40 rounded-lg px-3 py-2 text-[11px]">
+          <span className="text-amber-200">🔥 连胜 <b className="text-amber-300 tabular-nums">{store.winStreak}</b>
+            {store.bestWinStreak > store.winStreak && <span className="text-stone-500">（最佳 {store.bestWinStreak}）</span>}
+          </span>
+          <span className="text-stone-500">{10 - (store.winStreak % 10)} 胜后领里程碑</span>
+        </div>
+      )}
       {/* 区域横滚 */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-3 px-3 scrollbar-none">
         {REGIONS.map(r => (
