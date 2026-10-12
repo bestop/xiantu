@@ -78,7 +78,7 @@ export function WorldBossPanel({ onBack }: { onBack: () => void }) {
           return (
             <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-violet-200/90 bg-violet-950/30 border border-violet-900/50 rounded-lg px-2.5 py-1.5">
               <span aria-hidden>🏆</span>
-              <span>首杀限定称号：<b className="text-violet-300">{tDef ? `「${tDef.name}」` : '待揭晞'}</b>{owned && ' · 已授'}</span>
+              <span>首杀限定称号：<b className="text-violet-300">{tDef ? `「${tDef.name}」` : '待揭晓'}</b>{owned && ' · 已授'}</span>
             </div>
           );
         })()}

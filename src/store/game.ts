@@ -9,7 +9,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   GameState, SkillId, ActivityId, TabId, BattleRewards, EquipSlot,
   Equipment, OfflineReport, InvItem, AchievementState, MoreViewId,
-  PlayerSectState, SectId, ActiveBuff, ActiveBuffKey, Statistics,
+  PlayerSectState, SectId, ActiveBuff, ActiveBuffKey, Statistics, WorldBossState,
 } from '@/types/game';
 import { ACTIVITY_MAP, xpToNext, gatherTier, combatLevelSum, pillMultiplier } from '@/lib/game/skills';
 import {
@@ -24,13 +24,15 @@ import {
   MAX_PETS, makePet, grantPetXp, releaseGold, normalizePet,
   canEvolve, petEvolveReq, petDisplayName, PET_STAGES, MAX_PET_STARS,
 } from '@/lib/game/pets';
-import { initialWorldBoss, checkRotate, WorldBossAttemptResult } from '@/lib/game/worldboss';
+import {
+  initialWorldBoss, checkRotate, WorldBossAttemptResult, WORLD_BOSSES, wbMaxHp,
+} from '@/lib/game/worldboss';
 import {
   isRefinable, refineCost, refineSuccessRate, refineOreName,
 } from '@/lib/game/refine';
 import {
   SECT_MAP, getSectShopEntries, grantContribution, todayKey,
-  CONTRIB_PER_KILL, CONTRIB_PER_BOSS, CONTRIB_PER_WB, sectTitleId,
+  CONTRIB_PER_KILL, CONTRIB_PER_BOSS, CONTRIB_PER_WB, sectTitleId, sectRank,
 } from '@/lib/game/sects';
 import {
   initialRebirth, normalizeRebirth, canRebirth, rebirthPointsGain, REBIRTH_TITLES,
@@ -150,7 +152,7 @@ export interface GameStore extends GameState {
   // 画册奖励与称号
   claimAlbumReward: (id: string) => void;
   cycleTitle: () => void;
-  syncAutoTitles: () => void;
+  syncAutoTitles: (quiet?: boolean) => void;
 
   // 世界 BOSS
   applyWorldBossResult: (r: WorldBossAttemptResult) => void;
@@ -183,6 +185,20 @@ function removeItem(inventory: InvItem[], itemId: string, qty: number): InvItem[
   return next;
 }
 
+// 世界 BOSS 存档规范化：bossIdx 越界/负数会令面板取到 undefined 直接崩淡，
+// hp 与本期伤害夹紧到合法区间，随后再做 24h 轮换检查
+function normalizeWorldBoss(wb: WorldBossState): WorldBossState {
+  const len = WORLD_BOSSES.length;
+  const rawIdx = Number.isFinite(wb.bossIdx) ? Math.trunc(wb.bossIdx) : 0;
+  const bossIdx = ((rawIdx % len) + len) % len;
+  const maxHp = wbMaxHp(bossIdx);
+  const hp = Math.min(Math.max(0, Number.isFinite(wb.hp) ? wb.hp : maxHp), maxHp);
+  const seasonDamage = Math.max(0, Number.isFinite(wb.seasonDamage) ? wb.seasonDamage : 0);
+  const spawnedAt = Number.isFinite(wb.spawnedAt) ? wb.spawnedAt : Date.now();
+  const lastChallengeAt = Number.isFinite(wb.lastChallengeAt) ? wb.lastChallengeAt : 0;
+  return checkRotate({ ...wb, bossIdx, hp, seasonDamage, spawnedAt, lastChallengeAt, killed: !!wb.killed }, Date.now());
+}
+
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
@@ -199,7 +215,7 @@ export const useGameStore = create<GameStore>()(
         if ((s.stats as Partial<Statistics> | undefined)?.petsCaptured === undefined) {
           stats.petsCaptured = (s.pets ?? []).length;
         }
-        const worldBoss = s.worldBoss ? checkRotate(s.worldBoss, Date.now()) : initialWorldBoss();
+        const worldBoss = s.worldBoss ? normalizeWorldBoss(s.worldBoss) : initialWorldBoss();
         const pets = (s.pets ?? []).map(normalizePet);
         const equips: Record<string, Equipment> = {};
         for (const [uid, e] of Object.entries(s.equips ?? {})) {
@@ -224,7 +240,7 @@ export const useGameStore = create<GameStore>()(
           sect: s.sect ?? null,
           activeBuffs: buffs,
         });
-        get().syncAutoTitles();
+        get().syncAutoTitles(true);
         get().settleOffline();
       },
 
@@ -265,6 +281,12 @@ export const useGameStore = create<GameStore>()(
         // 过期丹药 buff 清理（轻量：仅在确有过期时写回）
         if ((state.activeBuffs ?? []).some(b => b.expireAt <= now)) {
           set({ activeBuffs: state.activeBuffs.filter(b => b.expireAt > now) });
+        }
+
+        // 世界 BOSS 24h 自动轮换（修复：此前仅启动时检查，在线挂机到点不轮换，与轮换表文案不符）
+        const rotatedBoss = checkRotate(state.worldBoss, now);
+        if (rotatedBoss !== state.worldBoss) {
+          set({ worldBoss: rotatedBoss });
         }
 
         let gold = state.gold;
@@ -662,6 +684,8 @@ export const useGameStore = create<GameStore>()(
         if (unlockedAny || JSON.stringify(achievements) !== JSON.stringify(state.achievements)) {
           set({ achievements, gems });
         }
+        // 位阶/转生/首杀等自动称号实时回填（修复：位阶晋升称号此前仅在刷新后授予）
+        get().syncAutoTitles();
       },
 
       claimAchievement: (id) => {
@@ -904,13 +928,19 @@ export const useGameStore = create<GameStore>()(
         }
       },
 
-      syncAutoTitles: () => {
+      syncAutoTitles: (quiet = false) => {
         const state = get();
         const titles = [...(state.titles ?? [])];
         let changed = false;
         if (state.sect) {
           const tid = currentSectTitleId(state);
-          if (tid && !titles.includes(tid)) { titles.push(tid); changed = true; }
+          if (tid && !titles.includes(tid)) {
+            titles.push(tid);
+            changed = true;
+            if (!quiet) {
+              get().showToast(`📜 贡献累积，晋升「${sectRank(state.sect.totalContrib).name}」！`);
+            }
+          }
         }
         const rc = state.rebirth?.count ?? 0;
         for (const t of REBIRTH_TITLES) {

@@ -55,6 +55,7 @@ export function RebirthPanel({ onBack }: { onBack: () => void }) {
       <Section title="转生条件">
         <div className="text-[11px] text-stone-400 space-y-1.5 leading-relaxed">
           <p>· 战斗技能总等级达到 <b className="text-amber-300">渡劫（{REBIRTH_MIN_COMBAT}）</b> 后方可转生。</p>
+          <p>· 转生点数按<b className="text-amber-300">战斗技能总等级 ÷ 25</b>计算（生活技能不计点，但也会一并重置）。</p>
           <p>· 转生将<b className="text-red-300">重置全部 16 项技能至 1 级</b>、清空丹药增益，换取转生点数。</p>
           <p className="text-stone-500">· {REBIRTH_KEEP_DESC}。</p>
           <p>· 每点转生点：技能经验 <b className="text-emerald-300">+{BONUS_XP_PER_POINT * 100}%</b>、攻击与生命 <b className="text-emerald-300">+{BONUS_STAT_PER_POINT * 100}%</b>，永久生效、多次叠加。</p>

@@ -84,7 +84,8 @@ export interface WorldBossAttemptResult {
 
 // 执行一次世界 BOSS 挑战（纯函数，返回结果与新状态）
 export function runWorldBossAttempt(state: GameState, now = Date.now()): WorldBossAttemptResult {
-  const wb = state.worldBoss;
+  // 挑战前先检查 24h 自动轮换（修复：此前轮换仅在启动时检查，长时间在线会打过期的 BOSS）
+  const wb = checkRotate(state.worldBoss, now);
   if (wb.killed) {
     return { ok: false, reason: 'dead', damage: 0, rounds: 0, killed: false, survived: false, overkill: 0, exp: 0, gold: 0, gems: 0, legendaryDrop: null, killDrop: null, killedBossName: null, worldBoss: wb, log: [] };
   }
@@ -107,14 +108,16 @@ export function runWorldBossAttempt(state: GameState, now = Date.now()): WorldBo
   let killed = false;
   let survived = true;
 
-  const mitigation = stats.def / (stats.def + 200);
-  const bossMitigation = p.def / (p.def + 200);
+  // 减伤口径与常规战斗 damageRoll 一致：永远由受击方的防御提供减免
+  // （修复：此前玩家攻击误用自身防御减免、BOSS 反击误用自身防御减免，两个乘区写反）
+  const bossDefMitigation = stats.def / (stats.def + 200);   // BOSS 防御减免（玩家攻击受此削减）
+  const playerDefMitigation = p.def / (p.def + 200);         // 玩家防御减免（BOSS 攻击受此削减）
 
   while (rounds < WB_MAX_ROUNDS && pHp > 0 && !killed) {
     rounds++;
     // 玩家攻击（含暴击）
     const crit = Math.random() < p.critRate;
-    const dmg = Math.max(1, Math.round(p.atk * (1 - bossMitigation) * (0.9 + Math.random() * 0.2))) * (crit ? 2 : 1);
+    const dmg = Math.max(1, Math.round(p.atk * (1 - bossDefMitigation) * (0.9 + Math.random() * 0.2))) * (crit ? 2 : 1);
     bossHp -= dmg;
     damage += dmg;
     log.push(`第${rounds}回合：你全力一击，造成 ${dmg.toLocaleString('zh-CN')} 点伤害${crit ? '（暴击！）' : ''}`);
@@ -124,7 +127,7 @@ export function runWorldBossAttempt(state: GameState, now = Date.now()): WorldBo
       log.push(`第${rounds}回合：你身形一闪，避开了 ${boss.name} 的怒涛一击！`);
       continue;
     }
-    const bDmg = Math.max(1, Math.round(stats.atk * (1 - mitigation) * (0.9 + Math.random() * 0.2)));
+    const bDmg = Math.max(1, Math.round(stats.atk * (1 - playerDefMitigation) * (0.9 + Math.random() * 0.2)));
     pHp -= bDmg;
     log.push(`第${rounds}回合：${boss.name} 反击，你承受 ${bDmg.toLocaleString('zh-CN')} 点伤害`);
     if (pHp <= 0) { survived = false; break; }
@@ -155,7 +158,8 @@ export function runWorldBossAttempt(state: GameState, now = Date.now()): WorldBo
   if (killed) {
     const nextIdx = (wb.bossIdx + 1) % WORLD_BOSSES.length;
     const ns = wbStats(WORLD_BOSSES[nextIdx].tier);
-    worldBoss = { bossIdx: nextIdx, hp: ns.hp, spawnedAt: now, lastChallengeAt: now, seasonDamage: wb.seasonDamage + damage, killed: false };
+    // 修复：击杀轮换后本期伤害清零（与「轮换后重新计榜」口径一致，此前旧期伤害被带入新 BOSS 的伤害榜）
+    worldBoss = { bossIdx: nextIdx, hp: ns.hp, spawnedAt: now, lastChallengeAt: now, seasonDamage: 0, killed: false };
   } else {
     worldBoss = { ...wb, hp: Math.max(0, bossHp), lastChallengeAt: now, seasonDamage: wb.seasonDamage + damage };
   }

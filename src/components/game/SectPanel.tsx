@@ -176,6 +176,7 @@ function SectHome({ confirmLeave, setConfirmLeave, flash }: {
           {shop.map(e => {
             const item = getItem(e.itemId);
             if (!item) return null;
+            const afford = sect.contribution >= e.price;
             return (
               <div key={e.itemId} className="flex items-center gap-2.5 bg-stone-800/40 border border-stone-800 rounded-lg p-2.5">
                 <span className="text-2xl" aria-hidden>{item.icon}</span>
@@ -183,13 +184,18 @@ function SectHome({ confirmLeave, setConfirmLeave, flash }: {
                   <div className="text-xs font-semibold text-stone-200">{e.label}</div>
                   <div className="text-[10px] text-stone-500 truncate">{item.description}</div>
                 </div>
-                <ActionButton className="!min-h-[40px] !px-3 text-xs" onClick={() => {
-                  const err = store.buySectItem(e.itemId);
-                  if (err) flash(err);
-                }}>📜 {formatNum(e.price)}</ActionButton>
+                <ActionButton
+                  className="!min-h-[40px] !px-3 text-xs"
+                  disabled={!afford}
+                  onClick={() => {
+                    const err = store.buySectItem(e.itemId);
+                    if (err) flash(err);
+                  }}
+                >📜 {formatNum(e.price)}</ActionButton>
               </div>
             );
           })}
+          <div className="text-[10px] text-stone-600 text-center">贡献不足的商品将置灰，战斗胜利与挑战世界 BOSS 可赚取贡献</div>
         </div>
       </Section>
 
