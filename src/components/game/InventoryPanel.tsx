@@ -248,6 +248,7 @@ function GearDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
   const store = useGameStore();
   const eq = store.equips[uid];
   const [msg, setMsg] = useState<string | null>(null);
+  const [confirmSell, setConfirmSell] = useState(false);
   if (!eq) return null;
   const isEquipped = Object.values(store.equipped).some(e => e?.uid === uid);
   const current = store.equipped[eq.slot];
@@ -261,6 +262,19 @@ function GearDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
   const goldOk = store.gold >= cost.gold;
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2600); };
+
+  // 高价值装备售出需二次确认：仙品/神品、已炼器、专属装备（防误触蒸发心血）
+  const precious = eq.quality === 'legendary' || eq.quality === 'mythic'
+    || (eq.refine ?? 0) > 0 || !!eq.sigAffix;
+  const trySell = () => {
+    if (precious && !confirmSell) {
+      setConfirmSell(true);
+      setTimeout(() => setConfirmSell(false), 3000);
+      return;
+    }
+    store.sellEquipment(uid);
+    onBack();
+  };
 
   return (
     <div className="p-3 pb-24 space-y-3">
@@ -345,9 +359,12 @@ function GearDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
         ) : (
           <ActionButton onClick={() => { store.equipGear(uid); onBack(); }}>装备</ActionButton>
         )}
-        <ActionButton variant="danger" onClick={() => { store.sellEquipment(uid); onBack(); }}
+        <ActionButton variant={precious && confirmSell ? 'ghost' : 'danger'} onClick={trySell}
           disabled={isEquipped}>
-          <span className="flex items-center justify-center gap-1"><Trash2 className="w-4 h-4" /> 售出 🪙{formatNum(eq.sellPrice)}</span>
+          <span className="flex items-center justify-center gap-1">
+            <Trash2 className="w-4 h-4" />
+            {precious && confirmSell ? '再点一次确认售出！' : `售出 🪙${formatNum(eq.sellPrice)}`}
+          </span>
         </ActionButton>
       </div>
     </div>

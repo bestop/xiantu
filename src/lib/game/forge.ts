@@ -136,5 +136,20 @@ export function forgeEquipment(recipe: ForgeRecipe): Equipment {
   eq.icon = recipe.icon;
   eq.baseId = recipe.id;
   eq.sigAffix = { ...recipe.sigAffix };
+  // 卖价折价（修复：此前沿用通用掉落公式，神品百二十阶卖价 ≈ 74 万金，
+  // 而合成成本仅 10~21 万，妖王 50% 掉率可无限刷 → 卖专属成了压倒性最优印钞策略）
+  eq.sellPrice = forgeSellPrice(recipe);
   return eq;
+}
+
+// 专属装备卖价：金币 + 全部材料卖价总和的 30%，向上取整到十位
+// 卖出永远净亏损约七成投入，仅保留「淘汰旧专属回收少量资源」的自由，堵死套利
+export function forgeSellPrice(recipe: ForgeRecipe): number {
+  const mats: { itemId: string; qty: number }[] = [
+    { itemId: recipe.materialId, qty: recipe.coreQty },
+    ...recipe.extraMats,
+  ];
+  const matValue = mats.reduce((s, m) => s + (getItem(m.itemId)?.sellPrice ?? 0) * m.qty, 0);
+  const raw = (recipe.gold + matValue) * 0.3;
+  return Math.max(10, Math.ceil(raw / 10) * 10);
 }

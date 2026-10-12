@@ -39,7 +39,7 @@ import {
 } from '@/lib/game/rebirth';
 import { ALBUM_REWARDS, isAlbumRewardAvailable } from '@/lib/game/scenes';
 import { getTitleDef, currentSectTitleId, normalizeTitles, WB_KILL_TITLES, hasAllWbTitles, HIDDEN_TITLE_HAOLING } from '@/lib/game/titles';
-import { FORGE_MAP, forgeCostCheck, forgeEquipment } from '@/lib/game/forge';
+import { FORGE_MAP, forgeCostCheck, forgeEquipment, forgeSellPrice } from '@/lib/game/forge';
 import { formatNum } from '@/components/game/ui-bits';
 
 const emptySkills = (): Record<SkillId, { level: number; xp: number }> => {
@@ -236,8 +236,19 @@ export const useGameStore = create<GameStore>()(
         const worldBoss = s.worldBoss ? normalizeWorldBoss(s.worldBoss) : initialWorldBoss();
         const pets = (s.pets ?? []).map(normalizePet);
         const equips: Record<string, Equipment> = {};
-        for (const [uid, e] of Object.entries(s.equips ?? {})) {
-          equips[uid] = { ...e, refine: (e as Equipment).refine ?? 0 };
+        for (const [uid, e0] of Object.entries(s.equips ?? {})) {
+          const e = e0 as Equipment;
+          // 旧档兼容 + 炼宝坊专属装备卖价归一（修复：旧档合成品仍带通用公式高价卖价，卖出可套利）
+          const recipe = e.baseId ? FORGE_MAP[e.baseId] : undefined;
+          const normalized = { ...e, refine: e.refine ?? 0 };
+          equips[uid] = recipe ? { ...normalized, sellPrice: forgeSellPrice(recipe) } : normalized;
+        }
+        // 穿戴槽位重绑到装备池对象（修复：反序列化后 equipped 与 equips 池引用脱钩，
+        // 此后穿戴中炼器更新池对象时槽位感知不到，属性加成静默失效）
+        const equipped = { ...s.equipped };
+        for (const slot of ['weapon', 'armor', 'accessory'] as EquipSlot[]) {
+          const cur = equipped[slot];
+          if (cur && equips[cur.uid]) equipped[slot] = equips[cur.uid];
         }
         const rebirth = normalizeRebirth(s.rebirth);
         // 旧档兼容：技能表新增 id 时从初始值补齐，避免 skills.focus.level 等直接访问 undefined 崩溃
@@ -252,7 +263,7 @@ export const useGameStore = create<GameStore>()(
           buffs = [...buffs, { key: 'atk', value: legacyAtk, expireAt: legacyExpire }];
         }
         set({
-          hydrated: true, stats, worldBoss, pets, equips, rebirth, skills,
+          hydrated: true, stats, worldBoss, pets, equips, equipped, rebirth, skills,
           titles: tn.titles, activeTitle: tn.activeTitle,
           albumClaims: s.albumClaims ?? [],
           sect: normalizeSect(s.sect, now),
@@ -621,6 +632,8 @@ export const useGameStore = create<GameStore>()(
           inventory: addItem(state.inventory, `equip:${eq.uid}`, 1),
         });
         get().showToast(`开启宝袋，获得【${eq.name}】！`);
+        // 仙品宝袋直接触发装备类成就（与其他获取路径同源，不再等 5s 轮询兕底）
+        get().checkAchievements();
         return eq;
       },
 
@@ -804,7 +817,14 @@ export const useGameStore = create<GameStore>()(
         if (success) {
           const nextRefine = (eq.refine ?? 0) + 1;
           equips[uid] = { ...eq, refine: nextRefine };
-          set({ inventory, gold, equips });
+          // 穿戴中的装备同步槽位引用（修复：此前仅更新装备池，equipped 槽位仍持旧对象，
+          // 穿戴中炼器成功但 computePlayerStats 读不到新 refine，属性加成静默失效）
+          const equipped = { ...state.equipped };
+          let equippedChanged = false;
+          for (const slot of ['weapon', 'armor', 'accessory'] as EquipSlot[]) {
+            if (equipped[slot]?.uid === uid) { equipped[slot] = equips[uid]; equippedChanged = true; }
+          }
+          set(equippedChanged ? { inventory, gold, equips, equipped } : { inventory, gold, equips });
           get().showToast(`🔨 炼器成功！${eq.name} 强化至 +${nextRefine}`);
         } else {
           set({ inventory, gold, equips });
@@ -1028,12 +1048,15 @@ export const useGameStore = create<GameStore>()(
             titles.push(HIDDEN_TITLE_HAOLING.id);
             haolingUnlocked = true;
           }
+          // 击杀掉落计入累计掉落口径（修复：仙品装备与专属异宝此前不计入搬运工/仓库管理员成就）
+          const wbDrops = (r.legendaryDrop ? 1 : 0) + (r.killDrop?.qty ?? 0);
           const stats = {
             ...stats0,
             wbKills: (state.stats.wbKills ?? 0) + 1,
             wbBestDamage: Math.max(state.stats.wbBestDamage ?? 0, r.damage),
             totalGoldEarned: state.stats.totalGoldEarned + gold,
             totalExpEarned: state.stats.totalExpEarned + r.exp,
+            totalDrops: state.stats.totalDrops + wbDrops,
           };
           set({ skills, gems: gems + r.gems, inventory, equips, stats, titles, gold: state.gold + gold, worldBoss: r.worldBoss, sect });
         } else {

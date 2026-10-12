@@ -150,7 +150,7 @@ function ForgeView({ onBack }: { onBack: () => void }) {
                 disabled={!check.ok}
                 onClick={() => craft(recipe)}
               >
-                {check.ok ? `⚒️ 熔铸「${recipe.name}」` : '材料不足，集齐后再来'}
+                {check.ok ? `⚒️ 熔铸「${recipe.name}」` : `还差 ${check.missing[0]}`}
               </ActionButton>
             </div>
           );
@@ -221,7 +221,7 @@ function ShopView({ onBack }: { onBack: () => void }) {
             <span className="w-10 h-10 rounded-lg border border-purple-800/50 bg-purple-950/60 flex items-center justify-center text-xl shrink-0" aria-hidden>🎁</span>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-purple-300">稀有装备宝袋</div>
-              <div className="text-[10px] text-stone-500">开出一件 {avgLv} 阶上品及以上随机装备</div>
+              <div className="text-[10px] text-stone-500">开出一件 {Math.min(120, avgLv)} 阶上品及以上随机装备</div>
             </div>
             <ActionButton className="!min-h-[40px] !px-3 text-xs" disabled={store.gems < 20} onClick={() => {
               const eq = store.buyEquipBag('rare');
@@ -232,7 +232,7 @@ function ShopView({ onBack }: { onBack: () => void }) {
             <span className="w-10 h-10 rounded-lg border border-amber-800/50 bg-amber-950/60 flex items-center justify-center text-xl shrink-0" aria-hidden>🎑</span>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-amber-300">仙品装备宝袋</div>
-              <div className="text-[10px] text-stone-500">开出一件 {avgLv} 阶仙品随机装备</div>
+              <div className="text-[10px] text-stone-500">开出一件 {Math.min(120, avgLv)} 阶仙品随机装备</div>
             </div>
             <ActionButton className="!min-h-[40px] !px-3 text-xs" disabled={store.gems < 60} onClick={() => {
               const eq = store.buyEquipBag('legendary');
