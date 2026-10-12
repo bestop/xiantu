@@ -234,7 +234,11 @@ export const useGameStore = create<GameStore>()(
           stats.petsCaptured = (s.pets ?? []).length;
         }
         const worldBoss = s.worldBoss ? normalizeWorldBoss(s.worldBoss) : initialWorldBoss();
-        const pets = (s.pets ?? []).map(normalizePet);
+        // 坏档防护：丢弃 monsterId 未知的灵宠（旧档/损坏档会令 petStats/petDisplayName 读取
+        // MONSTER_MAP 时抛错白屏），同源修复口径见 133d763 坏档规范化
+        const pets = (s.pets ?? []).map(normalizePet).filter(p => !!MONSTER_MAP[p.monsterId]);
+        // 出战灵宠被过滤/不存在时复位，避免悬空引用
+        const activePetUid = pets.some(p => p.uid === s.activePetUid) ? s.activePetUid : null;
         const equips: Record<string, Equipment> = {};
         for (const [uid, e0] of Object.entries(s.equips ?? {})) {
           const e = e0 as Equipment;
@@ -263,7 +267,7 @@ export const useGameStore = create<GameStore>()(
           buffs = [...buffs, { key: 'atk', value: legacyAtk, expireAt: legacyExpire }];
         }
         set({
-          hydrated: true, stats, worldBoss, pets, equips, equipped, rebirth, skills,
+          hydrated: true, stats, worldBoss, pets, equips, equipped, rebirth, skills, activePetUid,
           titles: tn.titles, activeTitle: tn.activeTitle,
           albumClaims: s.albumClaims ?? [],
           sect: normalizeSect(s.sect, now),
@@ -929,7 +933,8 @@ export const useGameStore = create<GameStore>()(
           activeBuffs: [],
           titles,
         });
-        get().showToast(`☸️ 转生功成！获得 ${gain} 点转生点（经验 +${gain}%，攻血 +${(gain * 0.5).toFixed(0)}%）`);
+        // 文案精确化：多世玩家累计加成为历史点数总和，仅展示本轮增量易误导
+        get().showToast(`☸️ 转生功成！+${gain} 点转生点（累计加成：技能经验 +${rebirth.points}%、攻血 +${(rebirth.points * 0.5).toFixed(0)}%）`);
         get().checkAchievements();
       },
 
