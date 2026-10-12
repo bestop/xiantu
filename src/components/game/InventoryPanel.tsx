@@ -78,12 +78,15 @@ export function InventoryPanel() {
       else if (item.type === 'treasure') treasures.push(inv);
       else materials.push(inv);
     }
-    // 背包装备按品质+等级排序
+    // 背包装备按 槽位（武器→护甲→饰品）→ 品质 → 阶位 排序：同槽位聚拢，一眼区分三类装备
+    const slotRank: Record<EquipSlot, number> = { weapon: 0, armor: 1, accessory: 2 };
     gearUids.sort((a, b) => {
       const ea = equips[a], eb = equips[b];
       if (!ea || !eb) return 0;
       const rank: Record<ItemQuality, number> = { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 };
-      return (rank[eb.quality] - rank[ea.quality]) || (eb.tier - ea.tier);
+      return slotRank[ea.slot] - slotRank[eb.slot]
+        || (rank[eb.quality] - rank[ea.quality])
+        || (eb.tier - ea.tier);
     });
     return { pills, materials, treasures, gearUids };
   }, [inventory, equips]);
@@ -175,7 +178,7 @@ export function InventoryPanel() {
                     {isEquipped && <span className="text-[9px] px-1 rounded bg-amber-900 text-amber-300">已装备</span>}
                   </div>
                   <div className="text-[10px] text-stone-500 mt-0.5">
-                    {eq.tier}阶 · {mainStatText(eq)} {eq.sigAffix && <span className="text-amber-400">· ✨专属</span>} {eq.affixes.length > 0 && `· ${eq.affixes.length}条副属性`}
+                    {eq.tier}阶 · <span className="text-stone-400">{SLOT_META[eq.slot].label}</span> · {mainStatText(eq)} {eq.sigAffix && <span className="text-amber-400">· ✨专属</span>} {eq.affixes.length > 0 && `· ${eq.affixes.length}条副属性`}
                   </div>
                 </div>
                 <span className="text-[10px] text-stone-500 shrink-0">🪙{formatNum(eq.sellPrice)}</span>
