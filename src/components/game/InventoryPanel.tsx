@@ -1,11 +1,13 @@
-// 背包面板：装备栏 / 物品分类 / 装备详情与对比 / 出售
+// 背包面板：纸娃娃装备台 / 图形化物品卡片 / 装备详情与对比 / 炼器 / 出售
 'use client';
 
 import { useMemo, useState } from 'react';
 import { useGameStore } from '@/store/game';
 import { getItem, QUALITY_TEXT, QUALITY_NAMES, AFFIX_NAMES, formatAffix } from '@/lib/game/items';
-import { BaseItem, Equipment, EquipSlot, ItemQuality, InvItem } from '@/types/game';
+import { BaseItem, Equipment, EquipSlot, ItemQuality, AffixKey, InvItem } from '@/types/game';
 import { computePlayerStats, equipTotals } from '@/lib/game/engine';
+import { combatLevelSum } from '@/lib/game/skills';
+import { realmAvatar } from '@/lib/game/realms';
 import {
   MAX_REFINE, isRefinable, refineCost, refineSuccessRate,
   refineMainMult, refineAffixMult, refineName, refineOreName,
@@ -22,7 +24,7 @@ const SLOT_META: Record<EquipSlot, { icon: string; label: string }> = {
   accessory: { icon: '💍', label: '饰品' },
 };
 
-// 品质发光（已装备槽位）
+// 品质发光（卡片/槽位辉光）
 const QUALITY_GLOW: Record<ItemQuality, string> = {
   common: 'shadow-[0_0_10px_rgba(120,113,108,0.15)]',
   fine: 'shadow-[0_0_10px_rgba(16,185,129,0.2)]',
@@ -32,15 +34,37 @@ const QUALITY_GLOW: Record<ItemQuality, string> = {
   mythic: 'shadow-[0_0_14px_rgba(244,63,94,0.35)]',
 };
 
-// 品质左侧色条
-const QUALITY_EDGE: Record<ItemQuality, string> = {
-  common: 'border-l-stone-600',
-  fine: 'border-l-emerald-600',
-  rare: 'border-l-cyan-600',
-  epic: 'border-l-purple-600',
-  legendary: 'border-l-amber-500',
-  mythic: 'border-l-rose-500',
+// 品质卡片外框（图形化卡片描边）
+const QUALITY_BORDER: Record<ItemQuality, string> = {
+  common: 'border-stone-700/90',
+  fine: 'border-emerald-800',
+  rare: 'border-cyan-800',
+  epic: 'border-purple-800',
+  legendary: 'border-amber-600/80',
+  mythic: 'border-rose-600/80',
 };
+
+// 品质图标砖：渐变底 + 彩边（图块化视觉核心）
+const QUALITY_TILE: Record<ItemQuality, string> = {
+  common: 'from-stone-600/40 via-stone-800/70 to-stone-900 border-stone-600/70',
+  fine: 'from-emerald-900/70 via-emerald-950/70 to-stone-900 border-emerald-700/70',
+  rare: 'from-cyan-900/70 via-cyan-950/70 to-stone-900 border-cyan-600/70',
+  epic: 'from-purple-900/70 via-purple-950/70 to-stone-900 border-purple-600/70',
+  legendary: 'from-amber-800/70 via-amber-950/70 to-stone-900 border-amber-500/80',
+  mythic: 'from-rose-800/70 via-rose-950/70 to-stone-900 border-rose-500/80',
+};
+
+// 主属性速览缩写（卡片空间紧凑）
+const STAT_SHORT: Record<AffixKey, string> = {
+  atk: '攻', def: '防', hp: '血', crit: '暴', dodge: '闪', luck: '运', speed: '速',
+};
+
+function mainStatCompact(eq: Equipment): string {
+  const key = eq.mainStat.key;
+  const v = eq.mainStat.value * refineMainMult(eq);
+  if (key === 'crit' || key === 'dodge') return `${STAT_SHORT[key]} +${(v * 100).toFixed(1)}%`;
+  return `${STAT_SHORT[key]} +${formatNum(v)}`;
+}
 
 export function InventoryPanel() {
   const store = useGameStore();
@@ -50,6 +74,11 @@ export function InventoryPanel() {
 
   const stats = computePlayerStats(store);
   const eqTotals = equipTotals(store.equipped);
+
+  // 纸娃娃：境界换装头像 + 装备评分合计
+  const avatar = realmAvatar(combatLevelSum(store.skills));
+  const scoreTotal = (['weapon', 'armor', 'accessory'] as EquipSlot[])
+    .reduce((s, slot) => s + (store.equipped[slot] ? gearScore(store.equipped[slot]!) : 0), 0);
 
   // 装备详情
   const detailEquip: Equipment | null = detailUid ? store.equips[detailUid] ?? null : null;
@@ -100,7 +129,35 @@ export function InventoryPanel() {
 
   return (
     <div className="p-3 pb-24 space-y-3">
-      {/* 装备栏总览 */}
+      {/* ===== 法相 · 装备台（纸娃娃） ===== */}
+      <Section title="法相 · 装备台" extra={<span className="text-[10px] text-stone-500">点击槽位查看详情</span>}
+        className="relative overflow-hidden">
+        <div aria-hidden className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-amber-600/10 blur-2xl pointer-events-none" />
+        <div className="relative grid grid-cols-3 gap-2">
+          {/* 左上：武器 */}
+          <EquipSocket slot="weapon" eq={store.equipped.weapon} onTap={() => store.equipped.weapon && setDetailUid(store.equipped.weapon.uid)} />
+          {/* 中：境界法相（跨两行） */}
+          <div className="row-span-2 flex flex-col items-center justify-center gap-1.5 py-1">
+            <div className="w-20 h-20 rounded-full border-2 border-amber-600/50 bg-gradient-to-br from-stone-800 to-amber-950/70 overflow-hidden shadow-[0_0_22px_rgba(245,158,11,0.2),inset_0_1px_0_0_rgba(255,255,255,0.08)]">
+              <img src={avatar.img} alt={`小修士${avatar.name}形象`}
+                className="w-full h-full object-cover object-top scale-[1.35] translate-y-[6%]" />
+            </div>
+            <div className="text-[10px] font-xianzi text-amber-200/90 leading-none">{avatar.name}</div>
+          </div>
+          {/* 右上：护甲 */}
+          <EquipSocket slot="armor" eq={store.equipped.armor} onTap={() => store.equipped.armor && setDetailUid(store.equipped.armor.uid)} />
+          {/* 左下：饰品 */}
+          <EquipSocket slot="accessory" eq={store.equipped.accessory} onTap={() => store.equipped.accessory && setDetailUid(store.equipped.accessory.uid)} />
+          {/* 右下：装备评分 */}
+          <div className="rounded-xl border border-amber-700/40 bg-gradient-to-b from-amber-950/50 to-stone-900 min-h-[76px] flex flex-col items-center justify-center gap-0.5 px-1">
+            <span className="text-[9px] text-stone-500 leading-none">装备评分</span>
+            <span className="text-base font-bold text-amber-300 tabular-nums leading-none">{formatNum(scoreTotal)}</span>
+            <span className="text-[8px] text-stone-600 leading-none">⚔️ 三槽合计</span>
+          </div>
+        </div>
+      </Section>
+
+      {/* 人物属性 */}
       <Section title="人物属性">
         <div className="grid grid-cols-3 gap-1.5 text-xs">
           <AttrBox icon="❤️" label="生命" value={formatNum(stats.maxHp)} bonus={eqTotals.hp} />
@@ -109,33 +166,6 @@ export function InventoryPanel() {
           <AttrBox icon="💨" label="速度" value={stats.speed} bonus={eqTotals.speed} />
           <AttrBox icon="🔥" label="暴击" value={`${(stats.critRate * 100).toFixed(1)}%`} />
           <AttrBox icon="🌪️" label="闪避" value={`${(stats.dodgeRate * 100).toFixed(1)}%`} />
-        </div>
-      </Section>
-
-      <Section title="已装备">
-        <div className="grid grid-cols-3 gap-2">
-          {(['weapon', 'armor', 'accessory'] as EquipSlot[]).map(slot => {
-            const eq = store.equipped[slot];
-            return (
-              <button key={slot} onClick={() => eq && setDetailUid(eq.uid)}
-                className={cn('rounded-lg p-2 min-h-[72px] flex flex-col items-center justify-center gap-1 border transition-colors',
-                  eq
-                    ? `bg-stone-800/60 border-stone-600/60 ${QUALITY_GLOW[eq.quality]}`
-                    : 'bg-stone-900/50 border border-dashed border-stone-800')}>
-                {eq ? (
-                  <>
-                    <span className="text-2xl" aria-hidden>{eq.icon}</span>
-                    <span className={cn('text-[10px] text-center leading-tight', QUALITY_TEXT[eq.quality])}>{eq.name}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-2xl opacity-30" aria-hidden>{SLOT_META[slot].icon}</span>
-                    <span className="text-[10px] text-stone-600">{SLOT_META[slot].label}</span>
-                  </>
-                )}
-              </button>
-            );
-          })}
         </div>
       </Section>
 
@@ -157,65 +187,121 @@ export function InventoryPanel() {
         ))}
       </div>
 
-      {/* 装备列表 */}
+      {/* 背包装备：按槽位分组 + 图形卡片网格 */}
       {tab === 'gear' && (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {grouped.gearUids.length === 0 && <EmptyHint text="尚无装备，去战斗或锻造获取吧" />}
-          {grouped.gearUids.map(uid => {
-            const eq = store.equips[uid];
-            if (!eq) return null;
-            const isEquipped = Object.values(store.equipped).some(e => e?.uid === uid);
+          {(['weapon', 'armor', 'accessory'] as EquipSlot[]).map(slot => {
+            const uids = grouped.gearUids.filter(uid => store.equips[uid]?.slot === slot);
+            if (uids.length === 0) return null;
             return (
-              <button key={uid} onClick={() => setDetailUid(uid)}
-                className={cn('w-full bg-stone-900/80 border rounded-xl p-2.5 flex items-center gap-2.5 text-left border-l-2 transition-colors hover:bg-stone-900',
-                  isEquipped ? 'border-amber-700' : 'border-stone-800',
-                  QUALITY_EDGE[eq.quality])}>
-                <span className="text-2xl" aria-hidden>{eq.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn('text-xs font-semibold truncate', QUALITY_TEXT[eq.quality])}>{refineName(eq)}</span>
-                    <QualityBadge quality={eq.quality} />
-                    {isEquipped && <span className="text-[9px] px-1 rounded bg-amber-900 text-amber-300">已装备</span>}
-                  </div>
-                  <div className="text-[10px] text-stone-500 mt-0.5">
-                    {eq.tier}阶 · <span className="text-stone-400">{SLOT_META[eq.slot].label}</span> · {mainStatText(eq)} {eq.sigAffix && <span className="text-amber-400">· ✨专属</span>} {eq.affixes.length > 0 && `· ${eq.affixes.length}条副属性`}
-                  </div>
+              <div key={slot}>
+                <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                  <span className="text-xs" aria-hidden>{SLOT_META[slot].icon}</span>
+                  <span className="text-[11px] font-semibold text-stone-300">{SLOT_META[slot].label}</span>
+                  <span className="text-[10px] text-stone-600 tabular-nums">×{uids.length}</span>
+                  <span className="flex-1 h-px bg-stone-800/80" aria-hidden />
                 </div>
-                <span className="text-[10px] text-stone-500 shrink-0">🪙{formatNum(eq.sellPrice)}</span>
-              </button>
+                <div className="grid grid-cols-3 gap-2">
+                  {uids.map(uid => {
+                    const eq = store.equips[uid];
+                    if (!eq) return null;
+                    const isEquipped = Object.values(store.equipped).some(e => e?.uid === uid);
+                    return <GearCard key={uid} eq={eq} isEquipped={isEquipped} onTap={() => setDetailUid(uid)} />;
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>
       )}
 
-      {/* 丹药/材料/宝藏列表 */}
-      {tab !== 'gear' && (
-        <div className="space-y-2">
-          {(tab === 'pill' ? grouped.pills : tab === 'material' ? grouped.materials : grouped.treasures).length === 0 && (
-            <EmptyHint text="暂无物品" />
-          )}
-          {(tab === 'pill' ? grouped.pills : tab === 'material' ? grouped.materials : grouped.treasures).map(inv => {
-            const item = getItem(inv.itemId);
-            if (!item) return null;
-            return (
-              <button key={inv.itemId} onClick={() => setDetailBase(inv.itemId)}
-                className={cn('w-full bg-stone-900/80 border border-stone-800 border-l-2 rounded-xl p-2.5 flex items-center gap-2.5 text-left transition-colors hover:bg-stone-900',
-                  QUALITY_EDGE[item.quality])}>
-                <span className="text-2xl" aria-hidden>{item.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn('text-xs font-semibold', QUALITY_TEXT[item.quality])}>{item.name}</span>
-                    <span className="text-[10px] text-stone-500">×{formatNum(inv.quantity)}</span>
-                  </div>
-                  <div className="text-[10px] text-stone-500 truncate">{item.description}</div>
-                </div>
-                <span className="text-[10px] text-stone-500 shrink-0">🪙{item.sellPrice}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* 丹药/材料/宝藏：图形卡片网格 */}
+      {tab !== 'gear' && (() => {
+        const list = tab === 'pill' ? grouped.pills : tab === 'material' ? grouped.materials : grouped.treasures;
+        return (
+          <div className="space-y-2">
+            {list.length === 0 && <EmptyHint text="暂无物品" />}
+            <div className="grid grid-cols-3 gap-2">
+              {list.map(inv => {
+                const item = getItem(inv.itemId);
+                if (!item) return null;
+                return <ItemCard key={inv.itemId} item={item} qty={inv.quantity} onTap={() => setDetailBase(inv.itemId)} />;
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
+  );
+}
+
+// ===== 已装备槽位（纸娃娃插槽） =====
+function EquipSocket({ slot, eq, onTap }: { slot: EquipSlot; eq: Equipment | null; onTap: () => void }) {
+  if (!eq) {
+    return (
+      <div className="rounded-xl p-1.5 min-h-[76px] flex flex-col items-center justify-center gap-0.5 border border-dashed border-stone-800 bg-stone-900/50">
+        <span className="text-2xl opacity-30" aria-hidden>{SLOT_META[slot].icon}</span>
+        <span className="text-[10px] text-stone-600">{SLOT_META[slot].label}</span>
+      </div>
+    );
+  }
+  return (
+    <button onClick={onTap}
+      className={cn('relative rounded-xl p-1.5 min-h-[76px] flex flex-col items-center justify-center gap-0.5 border bg-gradient-to-br overflow-hidden transition active:scale-95',
+        QUALITY_TILE[eq.quality], QUALITY_GLOW[eq.quality])}>
+      <span className="absolute top-1 left-1 text-[8px] leading-none px-1 py-0.5 rounded bg-black/50 text-stone-300 tabular-nums">{eq.tier}阶</span>
+      {(eq.refine ?? 0) > 0 && (
+        <span className="absolute top-1 right-1 text-[8px] leading-none px-1 py-0.5 rounded bg-amber-900/90 text-amber-200 font-bold">+{eq.refine}</span>
+      )}
+      <span className="text-2xl mt-1" aria-hidden>{eq.icon}</span>
+      <span className={cn('text-[9px] leading-tight truncate max-w-full px-0.5', QUALITY_TEXT[eq.quality])}>{eq.name}</span>
+    </button>
+  );
+}
+
+// ===== 背包装备卡片 =====
+function GearCard({ eq, isEquipped, onTap }: { eq: Equipment; isEquipped: boolean; onTap: () => void }) {
+  return (
+    <button onClick={onTap}
+      className={cn('relative rounded-xl border p-1.5 flex flex-col items-center gap-1 bg-stone-900/80 transition active:scale-95 hover:bg-stone-900',
+        QUALITY_BORDER[eq.quality], QUALITY_GLOW[eq.quality],
+        isEquipped && 'border-amber-500/80 ring-1 ring-amber-500/60')}>
+      <div className={cn('relative w-full aspect-square rounded-lg border bg-gradient-to-br flex items-center justify-center overflow-visible', QUALITY_TILE[eq.quality])}>
+        <span className="text-3xl" aria-hidden>{eq.icon}</span>
+        <span className="absolute top-0.5 left-0.5 text-[8px] leading-none px-1 py-0.5 rounded bg-black/55 text-stone-300 tabular-nums">{eq.tier}阶</span>
+        {(eq.refine ?? 0) > 0 && (
+          <span className="absolute top-0.5 right-0.5 text-[8px] leading-none px-1 py-0.5 rounded bg-amber-900/90 text-amber-200 font-bold">+{eq.refine}</span>
+        )}
+        {isEquipped && (
+          <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[8px] leading-none px-1.5 py-0.5 rounded-full bg-gradient-to-b from-amber-500 to-amber-700 text-amber-50 border border-amber-400/60 font-bold whitespace-nowrap shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
+            已装备
+          </span>
+        )}
+      </div>
+      <span className={cn('text-[10px] font-semibold leading-tight truncate max-w-full', QUALITY_TEXT[eq.quality])}>{eq.name}</span>
+      <span className="text-[9px] text-stone-400 leading-none truncate max-w-full tabular-nums">
+        {mainStatCompact(eq)}{eq.sigAffix ? ' · ✨' : ''}
+      </span>
+    </button>
+  );
+}
+
+// ===== 丹药/材料/宝藏卡片 =====
+function ItemCard({ item, qty, onTap }: { item: BaseItem; qty: number; onTap: () => void }) {
+  return (
+    <button onClick={onTap}
+      className={cn('relative rounded-xl border p-1.5 flex flex-col items-center gap-1 bg-stone-900/80 transition active:scale-95 hover:bg-stone-900',
+        QUALITY_BORDER[item.quality], QUALITY_GLOW[item.quality])}>
+      <div className={cn('relative w-full aspect-square rounded-lg border bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[item.quality])}>
+        <span className="text-3xl" aria-hidden>{item.icon}</span>
+        {qty > 1 && (
+          <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none px-1 py-0.5 rounded bg-black/60 text-stone-200 tabular-nums">×{formatNum(qty)}</span>
+        )}
+      </div>
+      <span className={cn('text-[10px] font-semibold leading-tight truncate max-w-full', QUALITY_TEXT[item.quality])}>{item.name}</span>
+      <span className="text-[8px] text-stone-500 leading-none truncate max-w-full">{item.description}</span>
+    </button>
   );
 }
 
@@ -285,10 +371,15 @@ function GearDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
         <ChevronLeft className="w-4 h-4" /> 返回背包
       </button>
 
-      <Section className="text-center">
-        <div className="text-5xl mb-2" aria-hidden>{eq.icon}</div>
-        <div className={cn('text-base font-bold', QUALITY_TEXT[eq.quality])}>{refineName(eq)}</div>
-        <div className="flex items-center justify-center gap-1.5 mt-1">
+      <Section className="text-center relative overflow-hidden">
+        <div aria-hidden className="absolute -top-10 left-1/2 -translate-x-1/2 w-44 h-24 rounded-full bg-amber-600/10 blur-2xl pointer-events-none" />
+        <div className="relative flex justify-center mb-2.5">
+          <div className={cn('w-24 h-24 rounded-2xl border-2 bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[eq.quality], QUALITY_GLOW[eq.quality])}>
+            <span className="text-5xl" aria-hidden>{eq.icon}</span>
+          </div>
+        </div>
+        <div className={cn('text-base font-bold relative', QUALITY_TEXT[eq.quality])}>{refineName(eq)}</div>
+        <div className="flex items-center justify-center gap-1.5 mt-1 relative">
           <QualityBadge quality={eq.quality} />
           <span className="text-[10px] text-stone-500">{eq.tier}阶 · {SLOT_META[eq.slot].label}</span>
         </div>
@@ -413,7 +504,11 @@ function ItemDetail({ itemId, qty, onBack }: { itemId: string; qty: number; onBa
       </button>
 
       <Section className="text-center">
-        <div className="text-5xl mb-2" aria-hidden>{item.icon}</div>
+        <div className="flex justify-center mb-2.5">
+          <div className={cn('w-20 h-20 rounded-2xl border-2 bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[item.quality], QUALITY_GLOW[item.quality])}>
+            <span className="text-4xl" aria-hidden>{item.icon}</span>
+          </div>
+        </div>
         <div className={cn('text-base font-bold', QUALITY_TEXT[item.quality])}>{item.name}</div>
         <div className="text-xs text-stone-500 mt-1">{item.description}</div>
         <div className="text-[10px] text-stone-600 mt-1">持有 {formatNum(qty)} · 单价 🪙{item.sellPrice}</div>
