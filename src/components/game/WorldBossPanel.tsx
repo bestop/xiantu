@@ -44,9 +44,9 @@ export function WorldBossPanel({ onBack }: { onBack: () => void }) {
 
       {/* BOSS 卡 */}
       <div className="bg-gradient-to-br from-rose-950/60 via-stone-900 to-stone-900 border border-rose-900/60 rounded-xl overflow-hidden relative">
-        {/* 场景横幅（旅行青蛙式，按妖王切换） */}
+        {/* 场景横幅（旅行青蛙式，按妖王切换）；404 时隐藏破图，保留渐变底与文字 */}
         <div className="relative h-28">
-          <img src={scene.img} alt={scene.name} className="w-full h-full object-cover" />
+          <img src={scene.img} alt={scene.name} onError={e => { e.currentTarget.style.visibility = 'hidden'; }} className="w-full h-full object-cover" />
           <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-stone-900 via-stone-900/30 to-transparent" />
           {scene.refId && (
             <div className="absolute top-2 right-2 text-[9px] px-2 py-0.5 rounded-full bg-stone-950/70 border border-amber-800/60 text-amber-200/90">专属画境</div>
@@ -97,8 +97,9 @@ export function WorldBossPanel({ onBack }: { onBack: () => void }) {
         <div className="mt-3 relative">
           <ProgressBar value={wb.hp} max={maxHp} className="h-4" barClass="bg-gradient-to-r from-rose-700 to-rose-500" showText />
           <div className="flex justify-between text-[10px] text-stone-500 mt-1 tabular-nums">
+            {/* 削减百分比钉在 [0,100]：hp 异常高于 maxHp（坏档/迁移边界）时不显负数 */}
             <span>剩余血量 {formatNum(wb.hp)} / {formatNum(maxHp)}</span>
-            <span>已削减 {((1 - wb.hp / maxHp) * 100).toFixed(1)}%</span>
+            <span>已削减 {Math.min(100, Math.max(0, (1 - wb.hp / maxHp) * 100)).toFixed(1)}%</span>
           </div>
         </div>
 
@@ -179,7 +180,7 @@ export function WorldBossPanel({ onBack }: { onBack: () => void }) {
       <Section title="本期伤害榜" extra={<span className="text-[10px] text-amber-300">你的排名 第 {ranking.playerRank} / {ranking.entries.length} 位</span>}>
         <div className="space-y-1">
           {ranking.entries.slice(0, 10).map((e, i) => (
-            <div key={e.name}
+            <div key={`${e.name}-${i}`}
               className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs',
                 e.isPlayer ? 'bg-amber-950/40 border border-amber-900/50' : i % 2 === 0 ? 'bg-stone-800/30' : '')}>
               <span className={cn('w-5 text-center text-[10px] tabular-nums shrink-0',

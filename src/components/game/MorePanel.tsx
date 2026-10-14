@@ -450,7 +450,9 @@ function AlbumView({ onBack }: { onBack: () => void }) {
                   <div key={s.id}
                     className={cn('relative rounded-xl overflow-hidden border aspect-[4/3]',
                       has ? 'border-stone-700 bg-stone-900' : 'border-stone-800/60 bg-stone-950/60')}>
+                    {/* 404 防御：破图隐藏，保留卡片文字与锁定/收录角标（与图鉴兜底同口径） */}
                     <img src={s.img} alt={has ? s.name : '未解锁'} loading="lazy" decoding="async"
+                      onError={e => { e.currentTarget.style.visibility = 'hidden'; }}
                       className={cn('absolute inset-0 w-full h-full object-cover transition',
                         has ? '' : 'opacity-15 blur-[6px] grayscale scale-110')} />
                     {has && <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />}

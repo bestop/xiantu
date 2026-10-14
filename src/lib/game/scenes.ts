@@ -196,9 +196,15 @@ export function isActivitySceneUnlocked(skillId: string, state: GameState): bool
   return (state.skills[skillId as SkillId]?.level ?? 1) >= 2;
 }
 
-// 世界 BOSS 明信片：挑战过一次（本期造成过伤害，或历史击杀）即解锁
+// 世界 BOSS 明信片：
+// - 通用画境（无 refId）：挑战过一次即收录（本期造成过伤害，或历史击杀）
+// - 妖王专属画境（refId=boss.name）：击杀对应妖王后收录（与妖王称号图鉴同口径）
 export function isBossSceneUnlocked(state: GameState): boolean {
   return state.worldBoss.seasonDamage > 0 || (state.stats.wbKills ?? 0) > 0;
+}
+
+export function isBossRefSceneUnlocked(bossName: string, state: GameState): boolean {
+  return (state.stats.wbSlain ?? []).includes(bossName);
 }
 
 export function isSceneUnlocked(scene: SceneDef, state: GameState): boolean {
@@ -206,7 +212,8 @@ export function isSceneUnlocked(scene: SceneDef, state: GameState): boolean {
     case 'home': return true;
     case 'region': return scene.refId ? isRegionSceneUnlocked(scene.refId, state) : false;
     case 'activity': return scene.refId ? isActivitySceneUnlocked(scene.refId, state) : false;
-    case 'boss': return isBossSceneUnlocked(state);
+    // 有 refId 的是妖王专属画境，须击杀对应妖王；无 refId 的通用画境挑战一次即收录
+    case 'boss': return scene.refId ? isBossRefSceneUnlocked(scene.refId, state) : isBossSceneUnlocked(state);
   }
 }
 
@@ -219,7 +226,8 @@ export function sceneUnlockHint(scene: SceneDef): string {
   switch (scene.kind) {
     case 'region': return '到访该区域后收录';
     case 'activity': return '修行此项活动后收录';
-    case 'boss': return '挑战世界 BOSS 后收录';
+    // 妖王专属画境与通用画境的解锁条件不同，提示分别对齐
+    case 'boss': return scene.refId ? '击杀该妖王后收录' : '挑战世界 BOSS 后收录';
     default: return '';
   }
 }
