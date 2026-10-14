@@ -1,14 +1,16 @@
-// 技能面板：16 技能总览 / 训练活动 / 炼丹锻造
+// 技能面板：修行总览 / 16 技能图形卡 / 技能详情 / 炼丹锻造
+// 图形化改造：纯视图层，逻辑与存档零改动，旧档天然兼容（img 缺失时回退 emoji）
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useGameStore } from '@/store/game';
-import { SKILLS, SKILL_MAP, ACTIVITY_MAP, xpToNext, gatherTier } from '@/lib/game/skills';
+import { SKILLS, SKILL_MAP, ACTIVITY_MAP, xpToNext, gatherTier, combatLevelSum, totalSkillLevel, getTitle } from '@/lib/game/skills';
+import { ACTIVITY_SCENE } from '@/lib/game/scenes';
 import { SkillId, SkillCategory, MAX_SKILL_LEVEL } from '@/types/game';
 import { Section, ProgressBar, ActionButton, formatNum, formatDuration } from './ui-bits';
-import { getItem, CRAFT_RECIPES, CraftRecipe, QUALITY_TEXT } from '@/lib/game/items';
+import { getItem, CRAFT_RECIPES, CraftRecipe } from '@/lib/game/items';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, Hammer, FlaskConical, Play, Square, X } from 'lucide-react';
+import { ChevronLeft, Hammer, FlaskConical, Play, Square } from 'lucide-react';
 
 const CATEGORY_TABS: { id: SkillCategory | 'all'; label: string }[] = [
   { id: 'all', label: '全部' },
@@ -17,6 +19,42 @@ const CATEGORY_TABS: { id: SkillCategory | 'all'; label: string }[] = [
   { id: 'craft', label: '生产' },
   { id: 'support', label: '辅助' },
 ];
+
+// 分类徽标配色
+const CATEGORY_STYLE: Record<SkillCategory, { label: string; chip: string }> = {
+  combat: { label: '战斗', chip: 'bg-rose-950/85 text-rose-300' },
+  gather: { label: '采集', chip: 'bg-emerald-950/85 text-emerald-300' },
+  craft: { label: '生产', chip: 'bg-amber-950/85 text-amber-300' },
+  support: { label: '辅助', chip: 'bg-sky-950/85 text-sky-300' },
+};
+
+// 图片加载失败 → 隐藏 img 露出底层 emoji 回退（统一 404 防御口径）
+function hideImg(e: React.SyntheticEvent<HTMLImageElement>) {
+  e.currentTarget.style.visibility = 'hidden';
+}
+
+// ---------- 效果文本（当前等级 / 下一级复用） ----------
+function skillEffectText(effectKey: string, lv: number): string {
+  switch (effectKey) {
+    case 'hp': return `生命上限 ${40 + lv * 12}（基础 40 + 每级 12）`;
+    case 'power': return `基础攻击 ${6 + lv * 2}（每级 +2）`;
+    case 'weaponry': return `武器增伤 ${lv}（每级 +1 攻）`;
+    case 'defence': return `防御 ${3 + Math.round(lv * 1.5)}（每级 +1.5）`;
+    case 'speed': return `速度 ${5 + Math.round(lv * 0.5)}（每级 +0.5，提升闪避）`;
+    case 'mining': return `当前可采 ${gatherTier(lv)} 阶矿石`;
+    case 'fishing': return `当前可钓 ${gatherTier(lv)} 阶灵鱼`;
+    case 'begging': return `每轮化缘 ${Math.round(25 * (1 + lv * 0.06))} 金币`;
+    case 'archaeology': return `装备掉落 +${(lv * 0.2).toFixed(1)}%`;
+    case 'cooking': return `可炼制 ${CRAFT_RECIPES.filter(r => r.kind === 'cooking' && r.minSkillLevel <= lv).length} 种丹药`;
+    case 'forging': return `锻造装备 ${Math.min(80, lv)} 阶`;
+    case 'intellect': return `全部经验 +${lv}%`;
+    case 'focus': return `离线效率 ${Math.min(100, 60 + lv * 0.2).toFixed(0)}% · 上限 ${formatDuration(12 * 3600 + lv * 360)}`;
+    case 'luck': return `掉落率 +${(lv * 0.5).toFixed(1)}%`;
+    case 'imbibing': return `丹药效果 +${lv}%`;
+    case 'insight': return `暴击率 +${(lv * 0.15).toFixed(1)}%`;
+    default: return '';
+  }
+}
 
 export function SkillsPanel() {
   const store = useGameStore();
@@ -30,8 +68,62 @@ export function SkillsPanel() {
     return <SkillDetail skillId={detail} onBack={() => setDetail(null)} />;
   }
 
+  // 修行总览数据
+  const combatSum = combatLevelSum(store.skills);
+  const totalLv = totalSkillLevel(store.skills);
+  const realm = getTitle(combatSum);
+  const act = store.activeActivity ? ACTIVITY_MAP[store.activeActivity] : null;
+  const actScene = act ? ACTIVITY_SCENE[act.id] : null;
+  const roundProg = Math.min(1, Math.max(0, store.activityProgress || 0));
+
   return (
     <div className="p-3 pb-24 space-y-3">
+      {/* ===== 修行总览横幅 ===== */}
+      <section className="relative rounded-2xl overflow-hidden border border-stone-800 shadow-[0_0_20px_rgba(0,0,0,0.35)]">
+        {/* 背景：修炼中显示活动场景画，否则用洞府画 */}
+        <img
+          src={actScene?.img ?? '/scenes/home.jpg'}
+          alt={act ? act.name : '青庐洞府'}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-stone-900/30" />
+        <div className="relative p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] tracking-widest text-amber-200/80">修行总览</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-200 font-medium">
+              境界 · {realm}
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-stone-950/55 border border-stone-800/80 px-2.5 py-1.5">
+              <div className="text-[10px] text-stone-400">战斗等级</div>
+              <div className="text-base font-bold text-rose-300 tabular-nums leading-tight">{combatSum}</div>
+              <div className="text-[9px] text-stone-500">五项战斗技能之和</div>
+            </div>
+            <div className="rounded-xl bg-stone-950/55 border border-stone-800/80 px-2.5 py-1.5">
+              <div className="text-[10px] text-stone-400">技能总等级</div>
+              <div className="text-base font-bold text-amber-300 tabular-nums leading-tight">
+                {totalLv}<span className="text-[10px] text-stone-500 font-normal"> / {SKILLS.length * MAX_SKILL_LEVEL}</span>
+              </div>
+              <div className="text-[9px] text-stone-500">共 {SKILLS.length} 项技艺</div>
+            </div>
+          </div>
+          {act ? (
+            <div className="mt-2 rounded-xl bg-stone-950/55 border border-emerald-900/50 px-2.5 py-1.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-emerald-300 font-medium">正在修炼 · {act.name}</span>
+                <span className="text-stone-500 tabular-nums">每轮 {act.intervalSec} 秒</span>
+              </div>
+              <ProgressBar value={roundProg} max={1} className="mt-1 h-1.5" barClass="bg-gradient-to-r from-emerald-600 to-emerald-400" />
+            </div>
+          ) : (
+            <div className="mt-2 rounded-xl bg-stone-950/55 border border-stone-800/80 px-2.5 py-2 text-[11px] text-stone-400">
+              暂无修炼中的技艺 —— 点击下方卡片选择一项挂机修行
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* 分类过滤 */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-3 px-3">
         {CATEGORY_TABS.map(t => (
@@ -45,33 +137,63 @@ export function SkillsPanel() {
         ))}
       </div>
 
-      {/* 技能网格 */}
+      {/* ===== 技能图形卡网格 ===== */}
       <div className="grid grid-cols-2 gap-2">
         {filtered.map(s => {
           const prog = store.skills[s.id];
           const need = xpToNext(prog.level);
           const training = store.activeActivity ? ACTIVITY_MAP[store.activeActivity]?.skillId === s.id : false;
           const maxed = prog.level >= MAX_SKILL_LEVEL;
+          const cat = CATEGORY_STYLE[s.category];
           return (
             <button key={s.id} onClick={() => setDetail(s.id)}
-              className={cn('bg-stone-900/80 border rounded-xl p-2.5 text-left transition active:scale-[0.98] relative overflow-hidden',
+              className={cn('relative rounded-xl overflow-hidden border text-left transition active:scale-[0.98] group',
                 training
-                  ? 'border-emerald-600/80 shadow-[0_0_14px_rgba(16,185,129,0.12)] animate-emerald-pulse'
-                  : 'border-stone-800 hover:bg-stone-900')}>
+                  ? 'border-emerald-500/70 shadow-[0_0_16px_rgba(16,185,129,0.18)] animate-emerald-pulse'
+                  : maxed
+                    ? 'border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.12)]'
+                    : 'border-stone-800 hover:border-stone-700')}>
               {/* 修炼中顶部流光 */}
-              {training && <div aria-hidden className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent" />}
-              <div className="flex items-center gap-2">
-                <span className={cn('w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-xl border',
-                  training ? 'bg-emerald-950/50 border-emerald-800/60' : 'bg-stone-800/60 border-stone-700/50')} aria-hidden>{s.icon}</span>
-                <span className="text-xs font-semibold text-stone-200 flex-1">{s.name}</span>
-                {training && <span className="text-[9px] px-1 rounded bg-emerald-900 text-emerald-300">修炼中</span>}
+              {training && <div aria-hidden className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/80 to-transparent z-20" />}
+              {/* 画布（emoji 兜底在最底层） */}
+              <div className="relative aspect-[4/3] w-full bg-stone-800">
+                <span aria-hidden className="absolute inset-0 flex items-center justify-center text-4xl opacity-70">{s.icon}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.img} alt={s.name} loading="lazy" onError={hideImg}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-active:scale-105" />
+                {/* 渐变压暗，保证文字可读 */}
+                <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-stone-950/95 via-stone-950/25 to-transparent" />
+                {/* 角标：分类（左上） */}
+                <span className={cn('absolute top-1.5 left-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm font-medium', cat.chip)}>
+                  {cat.label}
+                </span>
+                {/* 角标：修炼中 / 满级（右上） */}
+                {training && (
+                  <span className="absolute top-1.5 right-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded bg-emerald-600/90 text-white font-medium shadow">
+                    修炼中
+                  </span>
+                )}
+                {maxed && !training && (
+                  <span className="absolute top-1.5 right-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/90 text-stone-950 font-bold shadow animate-gold-pulse">
+                    满级
+                  </span>
+                )}
+                {/* 底部信息条 */}
+                <div className="absolute left-0 right-0 bottom-1.5 z-10 px-2 flex items-end justify-between gap-1">
+                  <span className="text-xs font-bold text-stone-100 drop-shadow truncate">{s.name}</span>
+                  <span className="shrink-0 text-[11px] font-bold text-amber-300 tabular-nums drop-shadow">
+                    {prog.level}<span className="text-[9px] text-stone-400 font-normal"> 级</span>
+                  </span>
+                </div>
+                {/* 经验进度条贴底 */}
+                <div className="absolute left-0 right-0 bottom-0 z-10 h-1.5 bg-stone-950/70">
+                  <div className={cn('h-full transition-all',
+                    training
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                      : 'bg-gradient-to-r from-amber-600 to-amber-400')}
+                    style={{ width: `${maxed ? 100 : Math.min(100, (prog.xp / Math.max(1, need)) * 100)}%` }} />
+                </div>
               </div>
-              <div className="flex items-baseline gap-1 mt-1.5">
-                <span className="text-lg font-bold text-amber-300 tabular-nums">{prog.level}</span>
-                <span className="text-[9px] text-stone-500">/{MAX_SKILL_LEVEL} 级</span>
-              </div>
-              <ProgressBar value={maxed ? 1 : prog.xp} max={maxed ? 1 : need} className="mt-1 h-1.5"
-                barClass={training ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : 'bg-gradient-to-r from-amber-600 to-amber-400'} />
             </button>
           );
         })}
@@ -89,30 +211,9 @@ function SkillDetail({ skillId, onBack }: { skillId: SkillId; onBack: () => void
   const act = def.activityId ? ACTIVITY_MAP[def.activityId] : null;
   const training = store.activeActivity === def.activityId && !!def.activityId;
   const recipes = CRAFT_RECIPES.filter(r => r.kind === (skillId === 'cooking' ? 'cooking' : skillId === 'forging' ? 'forging' : '__none__'));
-
-  // 效果文本
-  const effectText = useMemo(() => {
-    const lv = prog.level;
-    switch (def.effectKey) {
-      case 'hp': return `生命上限 ${40 + lv * 12}（基础 40 + 每级 12）`;
-      case 'power': return `基础攻击 ${6 + lv * 2}（每级 +2）`;
-      case 'weaponry': return `武器增伤 ${lv}（每级 +1 攻）`;
-      case 'defence': return `防御 ${3 + Math.round(lv * 1.5)}（每级 +1.5）`;
-      case 'speed': return `速度 ${5 + Math.round(lv * 0.5)}（每级 +0.5，提升闪避）`;
-      case 'mining': return `当前可采 ${gatherTier(lv)} 阶矿石`;
-      case 'fishing': return `当前可钓 ${gatherTier(lv)} 阶灵鱼`;
-      case 'begging': return `每轮化缘 ${Math.round(25 * (1 + lv * 0.06))} 金币`;
-      case 'archaeology': return `装备掉落 +${(lv * 0.2).toFixed(1)}%`;
-      case 'cooking': return `可炼制 ${CRAFT_RECIPES.filter(r => r.kind === 'cooking' && r.minSkillLevel <= lv).length} 种丹药`;
-      case 'forging': return `锻造装备 ${Math.min(80, lv)} 阶`;
-      case 'intellect': return `全部经验 +${lv}%`;
-      case 'focus': return `离线效率 ${Math.min(100, 60 + lv * 0.2).toFixed(0)}% · 上限 ${formatDuration(12 * 3600 + lv * 360)}`;
-      case 'luck': return `掉落率 +${(lv * 0.5).toFixed(1)}%`;
-      case 'imbibing': return `丹药效果 +${lv}%`;
-      case 'insight': return `暴击率 +${(lv * 0.15).toFixed(1)}%`;
-      default: return '';
-    }
-  }, [def.effectKey, prog.level]);
+  const maxed = prog.level >= MAX_SKILL_LEVEL;
+  const cat = CATEGORY_STYLE[def.category];
+  const scene = ACTIVITY_SCENE[skillId];
 
   return (
     <div className="p-3 pb-24 space-y-3">
@@ -120,31 +221,45 @@ function SkillDetail({ skillId, onBack }: { skillId: SkillId; onBack: () => void
         <ChevronLeft className="w-4 h-4" /> 返回技能列表
       </button>
 
-      {/* 技能卡 */}
-      <Section className="bg-gradient-to-br from-stone-900 to-stone-900/50">
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 shrink-0 rounded-2xl border border-amber-700/40 bg-gradient-to-br from-stone-800 to-amber-950/60 flex items-center justify-center shadow-[0_0_18px_rgba(245,158,11,0.1)]">
-            <span className="text-3xl" aria-hidden>{def.icon}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-amber-100">{def.name}</h2>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-400">
-                {{ combat: '战斗系', gather: '采集系', craft: '生产系', support: '辅助系' }[def.category]}
-              </span>
+      {/* ===== 头图横幅 ===== */}
+      <section className="relative rounded-2xl overflow-hidden border border-stone-800 shadow-[0_0_20px_rgba(0,0,0,0.35)]">
+        <div className="relative h-40 w-full bg-stone-800">
+          <span aria-hidden className="absolute inset-0 flex items-center justify-center text-5xl opacity-70">{def.icon}</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={def.img} alt={def.name} onError={hideImg} className="absolute inset-0 w-full h-full object-cover" />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/35 to-transparent" />
+          <div className="absolute left-0 right-0 bottom-0 p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-bold text-amber-100 drop-shadow">{def.name}</h2>
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded backdrop-blur-sm font-medium', cat.chip)}>{cat.label}系</span>
+              {training && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/90 text-white font-medium">修炼中</span>}
             </div>
-            <div className="text-xs text-stone-400 mt-0.5">{def.description}</div>
+            <div className="text-xs text-stone-300/90 mt-1 drop-shadow">{def.description}</div>
           </div>
         </div>
-        <div className="mt-3">
+      </section>
+      {scene?.caption && (
+        <div className="text-[11px] italic text-stone-500 text-center -mt-1">「{scene.caption}」</div>
+      )}
+
+      {/* 进度与效果 */}
+      <Section className="bg-gradient-to-br from-stone-900 to-stone-900/50">
+        <div>
           <div className="flex justify-between text-xs mb-1">
             <span className="text-stone-400">等级 <b className="text-amber-300 tabular-nums">{prog.level}</b> / {MAX_SKILL_LEVEL}</span>
             <span className="text-stone-500 tabular-nums">{formatNum(prog.xp)} / {formatNum(need)}</span>
           </div>
           <ProgressBar value={prog.xp} max={need} className="h-2.5" showText barClass="bg-gradient-to-r from-amber-600 to-amber-400" />
         </div>
-        <div className="mt-2 text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-2.5 py-2">
-          当前效果：{effectText}
+        <div className="mt-2 space-y-1.5">
+          <div className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-2.5 py-2">
+            当前效果：{skillEffectText(def.effectKey, prog.level)}
+          </div>
+          {!maxed && (
+            <div className="text-xs text-stone-400 bg-stone-800/40 border border-stone-800 rounded-lg px-2.5 py-2">
+              下一级：{skillEffectText(def.effectKey, prog.level + 1)}
+            </div>
+          )}
         </div>
       </Section>
 
@@ -152,8 +267,14 @@ function SkillDetail({ skillId, onBack }: { skillId: SkillId; onBack: () => void
       {act && (
         <Section title="修炼活动">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl" aria-hidden>{act.icon}</span>
-            <div className="flex-1">
+            {/* 活动场景缩略图（emoji 兜底） */}
+            <div className="relative w-20 h-14 shrink-0 rounded-lg overflow-hidden border border-stone-800 bg-stone-800">
+              <span aria-hidden className="absolute inset-0 flex items-center justify-center text-2xl opacity-70">{act.icon}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={scene?.img} alt={act.name} loading="lazy" onError={hideImg}
+                className="absolute inset-0 w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 min-w-0">
               <div className="text-sm text-stone-200">{act.name}</div>
               <div className="text-[10px] text-stone-500">{act.description}</div>
               <div className="text-[10px] text-stone-500 mt-0.5">每轮 {act.intervalSec} 秒 · +{act.skillXp} 经验</div>
@@ -167,7 +288,7 @@ function SkillDetail({ skillId, onBack }: { skillId: SkillId; onBack: () => void
               </ActionButton>
             </div>
           ) : (
-            <ActionButton className="w-full" onClick={() => store.startActivity(act.id)} disabled={prog.level >= MAX_SKILL_LEVEL}>
+            <ActionButton className="w-full" onClick={() => store.startActivity(act.id)} disabled={maxed}>
               <span className="flex items-center justify-center gap-1"><Play className="w-4 h-4" /> 开始修炼</span>
             </ActionButton>
           )}

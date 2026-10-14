@@ -56,84 +56,100 @@ export const SKILLS: SkillDef[] = [
   {
     id: 'hp', name: '气血', icon: '❤️', category: 'combat',
     description: '修炼肉身气血，提升生命上限。',
+    img: '/scenes/skill-hp.png',
     xpPerTick: 0, effectKey: 'hp',
   },
   {
     id: 'power', name: '神力', icon: '💪', category: 'combat',
     description: '淬炼法力神通，提升基础攻击。',
+    img: '/scenes/skill-power.png',
     xpPerTick: 0, effectKey: 'power',
   },
   {
     id: 'weaponry', name: '神兵', icon: '⚔️', category: 'combat',
     description: '精研兵器之道，提升武器伤害。',
+    img: '/scenes/skill-weaponry.png',
     xpPerTick: 0, effectKey: 'weaponry',
   },
   {
     id: 'defence', name: '御体', icon: '🛡️', category: 'combat',
     description: '锤炼护体罡气，提升防御。',
+    img: '/scenes/skill-defence.png',
     xpPerTick: 0, effectKey: 'defence',
   },
   {
     id: 'speed', name: '遁速', icon: '💨', category: 'combat',
     description: '修炼身法遁术，提升速度与闪避。',
+    img: '/scenes/skill-speed.png',
     xpPerTick: 0, effectKey: 'speed',
   },
   // ===== 采集系：挂机活动 =====
   {
     id: 'mining', name: '采矿', icon: '⛏️', category: 'gather',
     description: '开采灵矿，产出锻造所需的矿石。等级越高，采得越高级的矿石。',
+    img: '/scenes/act-mining.jpg',
     xpPerTick: 20, activityId: 'mining', effectKey: 'mining',
   },
   {
     id: 'fishing', name: '垂钓', icon: '🎣', category: 'gather',
     description: '静心垂钓灵鱼。灵鱼是炼丹的重要辅材。',
+    img: '/scenes/act-fishing.jpg',
     xpPerTick: 20, activityId: 'fishing', effectKey: 'fishing',
   },
   {
     id: 'begging', name: '化缘', icon: '🙏', category: 'gather',
     description: '沿门托钵化缘，稳定获取金币。',
+    img: '/scenes/act-begging.jpg',
     xpPerTick: 18, activityId: 'begging', effectKey: 'begging',
   },
   {
     id: 'archaeology', name: '寻宝', icon: '🏺', category: 'gather',
     description: '探秘上古遗迹，寻找宝物与装备。提升装备掉落率。',
+    img: '/scenes/act-archaeology.jpg',
     xpPerTick: 22, activityId: 'archaeology', effectKey: 'archaeology',
   },
   // ===== 生产系 =====
   {
     id: 'cooking', name: '炼丹', icon: '🧪', category: 'craft',
     description: '以药材炼制丹药：回春散、狂暴丹、铁骨丹。',
+    img: '/scenes/act-cooking.jpg',
     xpPerTick: 0, effectKey: 'cooking',
   },
   {
     id: 'forging', name: '锻造', icon: '🔨', category: 'craft',
     description: '熔炼矿石锻造装备，等级越高装备品质越好。',
+    img: '/scenes/act-forging.jpg',
     xpPerTick: 0, effectKey: 'forging',
   },
   // ===== 支援系 =====
   {
     id: 'intellect', name: '悟道', icon: '📖', category: 'support',
     description: '参悟天道。每级 +1% 全部经验获取。',
+    img: '/scenes/act-intellect.jpg',
     xpPerTick: 0, effectKey: 'intellect',
   },
   {
     id: 'focus', name: '定力', icon: '🧘', category: 'support',
     description: '禅定入微。每级 +0.2% 离线效率与 6 分钟离线上限。',
+    img: '/scenes/act-focus.jpg',
     xpPerTick: 0, effectKey: 'focus',
   },
   {
     id: 'luck', name: '气运', icon: '🍀', category: 'support',
     description: '气运加身。每级 +0.5% 掉落率。',
+    img: '/scenes/act-luck.jpg',
     xpPerTick: 0, effectKey: 'luck',
   },
   {
     id: 'imbibing', name: '灵酒', icon: '🍶', category: 'support',
     description: '以灵酒淬体。每级 +1% 丹药效果。',
+    img: '/scenes/act-imbibing.jpg',
     xpPerTick: 0, effectKey: 'imbibing',
   },
   {
     id: 'insight', name: '灵识', icon: '👁️', category: 'support',
     description: '神识敏锐。每级 +0.15% 暴击率。',
+    img: '/scenes/act-insight.jpg',
     xpPerTick: 0, effectKey: 'insight',
   },
 ];

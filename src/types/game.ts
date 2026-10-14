@@ -33,6 +33,8 @@ export interface SkillDef {
   icon: string;
   category: SkillCategory;
   description: string;
+  // 插画路径（public 下；战斗技能为专属画，非战斗技能复用活动场景画）
+  img?: string;
   // 每 10 秒在线训练获得的基础 XP（生活技能通过对应活动获得）
   xpPerTick: number;
   // 对应的挂机活动（采集类）
