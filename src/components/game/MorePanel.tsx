@@ -25,6 +25,8 @@ import { ChevronLeft, ChevronRight, Store, Trophy, BookOpen, Settings, AlertTria
 export function MorePanel() {
   const view = useGameStore(s => s.moreView);
   const setView = useGameStore(s => s.setMoreView);
+  // 图鉴入口动态进度（与 CodexView 头部同口径）
+  const collectedCards = countCollectedCards(useGameStore(s => s.cards));
 
   if (view === 'shop') return <ShopView onBack={() => setView('root')} />;
   if (view === 'forge') return <ForgeView onBack={() => setView('root')} />;
@@ -47,7 +49,7 @@ export function MorePanel() {
     { id: 'forge', icon: <Hammer className="w-5 h-5" />, title: '炼宝坊', desc: '妖王异宝熔铸专属神装', tone: 'text-orange-300 bg-orange-950/60 border-orange-900/50' },
     { id: 'shop', icon: <Store className="w-5 h-5" />, title: '仙市', desc: '购买丹药、材料与装备宝袋', tone: 'text-stone-300 bg-stone-800/80 border-stone-700/50' },
     { id: 'achievements', icon: <Trophy className="w-5 h-5" />, title: '成就', desc: '永久成就与宝石奖励', tone: 'text-amber-300 bg-amber-950/60 border-amber-900/50' },
-    { id: 'codex', icon: <BookOpen className="w-5 h-5" />, title: '妖兽图鉴', desc: '收集怪物卡片，点亮图鉴', tone: 'text-stone-300 bg-stone-800/80 border-stone-700/50' },
+    { id: 'codex', icon: <BookOpen className="w-5 h-5" />, title: '妖兽图鉴', desc: `已收集 ${collectedCards}/${TOTAL_MONSTERS}，点亮图鉴`, tone: 'text-stone-300 bg-stone-800/80 border-stone-700/50' },
     { id: 'album', icon: <Images className="w-5 h-5" />, title: '山河画册', desc: '集齐明信片领限定称号，永久收藏', tone: 'text-sky-300 bg-sky-950/60 border-sky-900/50' },
     { id: 'settings', icon: <Settings className="w-5 h-5" />, title: '设置', desc: '重置存档与游戏说明', tone: 'text-stone-300 bg-stone-800/80 border-stone-700/50' },
   ] as const;
@@ -339,15 +341,20 @@ function CodexView({ onBack }: { onBack: () => void }) {
                     : 'bg-stone-900/80 border-stone-700'
                   : 'bg-stone-950/60 border-stone-800/50')}>
               <div className="relative aspect-square rounded-lg overflow-hidden bg-stone-900/60">
+                {/* 图片 404 兜底：已收集卡露出图腾（未收集不渲染，防剧透）。
+                    层序：图腾(默认) < 图片(z-10) < ？遮罩/妖王徽标(z-20) */}
+                {has && (
+                  <span className="absolute inset-0 flex items-center justify-center text-3xl" aria-hidden>{m.icon}</span>
+                )}
                 <img src={`/monsters/${m.id}.jpg`} alt={has ? m.name : '未知妖兽'} loading="lazy"
                   onError={e => { e.currentTarget.style.visibility = 'hidden'; }}
-                  className={cn('w-full h-full object-cover transition-all duration-300',
+                  className={cn('relative z-10 w-full h-full object-cover transition-all duration-300',
                     has ? '' : 'brightness-[0.16] saturate-0 blur-[2px] scale-110')} />
                 {!has && (
-                  <span className="absolute inset-0 flex items-center justify-center text-xl text-stone-600" aria-hidden>？</span>
+                  <span className="absolute inset-0 z-20 flex items-center justify-center text-xl text-stone-600" aria-hidden>？</span>
                 )}
                 {m.isBoss && has && (
-                  <span className="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-amber-950/85 border border-amber-700/60 text-amber-300">妖王</span>
+                  <span className="absolute top-1 left-1 z-20 text-[8px] px-1 py-0.5 rounded bg-amber-950/85 border border-amber-700/60 text-amber-300">妖王</span>
                 )}
               </div>
               <div className={cn('text-[10px] mt-1 truncate', has ? 'text-stone-300' : 'text-stone-600')}>
