@@ -81,6 +81,18 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'wb_all', name: '弑神者', icon: '🌀', description: '集齐 10 大妖王的首杀', metric: 'wbUnique', target: 10, gemReward: 150 },
   { id: 'wb_dmg_10k', name: '伤害之王', icon: '💯', description: '单次挑战世界 BOSS 造成 1 万伤害', metric: 'wbBestDamage', target: 10000, gemReward: 30 },
 
+  // ===== 锁妖塔 =====
+  { id: 'tower_10', name: '初入锁妖塔', icon: '🗼', description: '首次首通锁妖塔第 10 层', metric: 'towerFloor', target: 10, gemReward: 10 },
+  { id: 'tower_50', name: '塔中豪杰', icon: '🏯', description: '首通锁妖塔第 50 层', metric: 'towerFloor', target: 50, gemReward: 25 },
+  { id: 'tower_100', name: '百层塔主', icon: '🗻', description: '首通锁妖塔第 100 层', metric: 'towerFloor', target: 100, gemReward: 60 },
+  { id: 'tower_200', name: '锁妖尊者', icon: '🛕', description: '首通锁妖塔第 200 层', metric: 'towerFloor', target: 200, gemReward: 120 },
+
+  // ===== 每日修行 / 洞府 =====
+  { id: 'quest_10', name: '勤修不辍', icon: '📋', description: '累计完成 10 次每日修行任务', metric: 'questsDone', target: 10, gemReward: 10 },
+  { id: 'quest_50', name: '修行狂人', icon: '🗓️', description: '累计完成 50 次每日修行任务', metric: 'questsDone', target: 50, gemReward: 30 },
+  { id: 'spirit_5', name: '聚灵初成', icon: '🔮', description: '聚灵阵升至 5 级', metric: 'spiritLevel', target: 5, gemReward: 10 },
+  { id: 'spirit_20', name: '灵气充盈', icon: '🌟', description: '聚灵阵升至 20 级', metric: 'spiritLevel', target: 20, gemReward: 40 },
+
   // ===== 修行 =====
   { id: 'offline_10', name: '闭关十次', icon: '🌙', description: '离线修行 10 次', metric: 'offlineSessions', target: 10, gemReward: 8 },
   { id: 'offline_50', name: '闭关老僧', icon: '🛏️', description: '离线修行 50 次', metric: 'offlineSessions', target: 50, gemReward: 20 },
@@ -121,6 +133,9 @@ export function achievementValue(metric: string, state: GameState): number {
     case 'wbKills': return state.stats.wbKills ?? 0;
     case 'wbUnique': return (state.stats.wbSlain ?? []).length;
     case 'wbBestDamage': return state.stats.wbBestDamage ?? 0;
+    case 'towerFloor': return Math.max(0, state.tower?.bestFloor ?? 0);
+    case 'questsDone': return state.stats.questsDone ?? 0;
+    case 'spiritLevel': return Math.max(0, state.spiritArray ?? 0);
     case 'anySkill10': return Math.max(...Object.values(state.skills).map(s => s.level)) >= 10 ? 1 : 0;
     case 'anySkill25': return Math.max(...Object.values(state.skills).map(s => s.level)) >= 25 ? 1 : 0;
     case 'anySkill50': return Math.max(...Object.values(state.skills).map(s => s.level)) >= 50 ? 1 : 0;

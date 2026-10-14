@@ -2,6 +2,7 @@
 'use client';
 
 import { ReactNode } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import { QUALITY_COLORS, QUALITY_NAMES, QUALITY_TEXT } from '@/lib/game/items';
 import { ItemQuality } from '@/types/game';
 import { cn } from '@/lib/utils';
@@ -111,6 +112,18 @@ export function ActionButton({ children, onClick, disabled, variant = 'primary',
     >
       {children}
     </button>
+  );
+}
+
+// 通用子页头（金色书法字标题 + 返回键）
+export function SubHeader({ title, onBack }: { title: string; onBack: () => void }) {
+  return (
+    <div className="flex items-center gap-1 pb-1">
+      <button onClick={onBack} className="text-stone-400 min-h-[40px] min-w-[40px] flex items-center justify-center -ml-1 rounded-lg hover:bg-stone-900" aria-label="返回">
+        <ChevronLeft className="w-5 h-5" />
+      </button>
+      <h2 className="font-xianzi text-base font-bold text-gold-grad tracking-widest">{title}</h2>
+    </div>
   );
 }
 

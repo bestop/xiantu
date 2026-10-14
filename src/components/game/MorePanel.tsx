@@ -18,9 +18,10 @@ import { WorldBossPanel } from './WorldBossPanel';
 import { LeaderboardPanel } from './LeaderboardPanel';
 import { SectPanel } from './SectPanel';
 import { RebirthPanel } from './RebirthPanel';
-import { Section, ActionButton, formatNum } from './ui-bits';
+import { TowerPanel } from './TowerPanel';
+import { Section, ActionButton, formatNum, SubHeader } from './ui-bits';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, Store, Trophy, BookOpen, Settings, AlertTriangle, PawPrint, Skull, Medal, Images, Landmark, RefreshCcw, Gift, Hammer } from 'lucide-react';
+import { ChevronRight, Store, Trophy, BookOpen, Settings, AlertTriangle, PawPrint, Skull, Medal, Images, Landmark, RefreshCcw, Gift, Hammer, Castle } from 'lucide-react';
 
 export function MorePanel() {
   const view = useGameStore(s => s.moreView);
@@ -35,6 +36,7 @@ export function MorePanel() {
   if (view === 'album') return <AlbumView onBack={() => setView('root')} />;
   if (view === 'pets') return <PetPanel onBack={() => setView('root')} />;
   if (view === 'worldboss') return <WorldBossPanel onBack={() => setView('root')} />;
+  if (view === 'tower') return <TowerPanel onBack={() => setView('root')} />;
   if (view === 'leaderboard') return <LeaderboardPanel onBack={() => setView('root')} />;
   if (view === 'sect') return <SectPanel onBack={() => setView('root')} />;
   if (view === 'rebirth') return <RebirthPanel onBack={() => setView('root')} />;
@@ -44,6 +46,7 @@ export function MorePanel() {
     { id: 'sect', icon: <Landmark className="w-5 h-5" />, title: '宗门', desc: '拜入山门，贡献换珍宝，同门争魁首', tone: 'text-cyan-300 bg-cyan-950/60 border-cyan-900/50' },
     { id: 'pets', icon: <PawPrint className="w-5 h-5" />, title: '灵宠舍', desc: '收服妖兽为灵宠，进化融合羽化神兽', tone: 'text-emerald-300 bg-emerald-950/60 border-emerald-900/50' },
     { id: 'worldboss', icon: <Skull className="w-5 h-5" />, title: '世界 BOSS', desc: '血量持久的巨兽，伤害累积冲榜', tone: 'text-rose-300 bg-rose-950/60 border-rose-900/50' },
+    { id: 'tower', icon: <Castle className="w-5 h-5" />, title: '锁妖塔', desc: '封印万妖的无限塔，逐层首通有赏', tone: 'text-fuchsia-300 bg-fuchsia-950/60 border-fuchsia-900/50' },
     { id: 'leaderboard', icon: <Medal className="w-5 h-5" />, title: '天梯榜', desc: '综合实力排名，与万千修士争锋', tone: 'text-amber-300 bg-amber-950/60 border-amber-900/50' },
     { id: 'rebirth', icon: <RefreshCcw className="w-5 h-5" />, title: '轮回转生', desc: '渡劫之后轮回重修，换取永久加成', tone: 'text-violet-300 bg-violet-950/60 border-violet-900/50' },
     { id: 'forge', icon: <Hammer className="w-5 h-5" />, title: '炼宝坊', desc: '妖王异宝熔铸专属神装', tone: 'text-orange-300 bg-orange-950/60 border-orange-900/50' },
@@ -512,6 +515,9 @@ function SettingsView({ onBack }: { onBack: () => void }) {
           <p>· <b className="text-stone-300">炼宝坊</b>：妖王专属异宝熔铸专属神装，每件必带专属词条；十大妖王首杀各有限定称号，集齐十枚解锁隐藏称号「号令天下」。</p>
           <p>· <b className="text-stone-300">宗门</b>：拜入四大宗门获得专属异能，战斗积累贡献，兑换珍宝、晋升位阶。</p>
           <p>· <b className="text-stone-300">世界 BOSS</b>：血量跨挑战持久的巨兽，按伤害结算奖励并列入本期伤害榜，击杀得仙品装备与专属异宝。</p>
+          <p>· <b className="text-stone-300">锁妖塔</b>：封印万妖的无尽之塔，逐层首通有赏，每 5/10/25/50 层另有里程碑奖励，败北无惩罚。</p>
+          <p>· <b className="text-stone-300">每日修行</b>：主页每日任务 + 全勤宝箱，离线挂机同样计入进度。</p>
+          <p>· <b className="text-stone-300">洞府聚灵阵</b>：金币注灵升级，每级全局经验/金币收益 +1%，转生保留。</p>
           <p>· <b className="text-stone-300">天梯榜</b>：综合实力排名，与万千修士争锋。</p>
           <p>· <b className="text-stone-300">山河画册</b>：集齐明信片可领取宝石与限定称号，主页可佩戴称号。</p>
           <p>· <b className="text-stone-300">轮回转生</b>：渡劫后可转生，重置技能换取永久加成，资产全部保留。</p>
@@ -539,14 +545,4 @@ function SettingsView({ onBack }: { onBack: () => void }) {
   );
 }
 
-// ===== 通用子页头 =====
-function SubHeader({ title, onBack }: { title: string; onBack: () => void }) {
-  return (
-    <div className="flex items-center gap-1 pb-1">
-      <button onClick={onBack} className="text-stone-400 min-h-[40px] min-w-[40px] flex items-center justify-center -ml-1 rounded-lg hover:bg-stone-900" aria-label="返回">
-        <ChevronLeft className="w-5 h-5" />
-      </button>
-      <h2 className="font-xianzi text-base font-bold text-gold-grad tracking-widest">{title}</h2>
-    </div>
-  );
-}
+// ===== 通用子页头 =====（已提升至 ui-bits 共享，供锁妖塔等子面板复用）

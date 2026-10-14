@@ -405,6 +405,17 @@ export function CombatPanel() {
         <span className="text-xs text-rose-400 shrink-0">前往 ›</span>
       </button>
 
+      {/* 锁妖塔入口 */}
+      <button onClick={() => { store.setMoreView('tower'); store.setTab('more'); }}
+        className="w-full bg-gradient-to-r from-fuchsia-950/70 via-stone-900 to-stone-900 border border-fuchsia-900/60 rounded-xl p-3 flex items-center gap-3 min-h-[64px] active:scale-[0.99]">
+        <span className="text-3xl" aria-hidden>🗼</span>
+        <span className="flex-1 text-left">
+          <span className="block text-sm font-semibold text-fuchsia-200">锁妖塔 · 封印万妖</span>
+          <span className="block text-[10px] text-stone-500">已首通 {Math.max(0, store.tower?.bestFloor ?? 0)} 层 · 逐层挑战，首通有赏，败北无惩罚</span>
+        </span>
+        <span className="text-xs text-fuchsia-400 shrink-0">前往 ›</span>
+      </button>
+
       {/* 自动战斗开关（选怪界面也可操作） */}
       <button onClick={() => store.toggleAutoBattle()}
         className={cn('w-full rounded-xl border p-3 flex items-center justify-between min-h-[52px] transition',

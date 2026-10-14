@@ -241,6 +241,7 @@ export interface Statistics {
   wbBestDamage: number;  // 单次挑战最高伤害
   wbSlain?: string[];    // 已首次击杀过的世界 BOSS 名（限定称号依据）
   encounters?: number;   // 累计触发奇遇次数（v5 新增，旧档缺省 0）
+  questsDone?: number;   // 累计完成的每日修行任务次数（v6 新增，旧档缺省 0）
 }
 
 // ---------- 宠物 ----------
@@ -295,6 +296,7 @@ export type MoreViewId =
   | 'root' | 'shop' | 'achievements' | 'codex'
   | 'pets' | 'worldboss' | 'leaderboard'
   | 'sect' | 'rebirth' | 'album' | 'forge'
+  | 'tower'
   | 'settings';
 
 // ---------- 成就 ----------
@@ -330,6 +332,7 @@ export interface OfflineReport {
   battleDrops: { itemId: string; qty: number }[];
   gems: number;
   petXp?: number; // 出战灵宠离线经验（旧档报告无此字段）
+  activityRounds?: number; // 离线挂机完成轮次（每日修行任务计数用，旧档报告无此字段）
 }
 
 // ---------- 商店 ----------
@@ -389,6 +392,23 @@ export interface DailiesState {
   lastDay: string; // 最后一次签到日（YYYY-MM-DD）；'' 未签过
   streak: number;  // 连续签到天数
   best: number;    // 最长连续签到
+}
+
+// ---------- 锁妖塔（v6 新增） ----------
+
+// 封印万妖的无限塔：每层首通奖励，败北无惩罚
+export interface TowerState {
+  bestFloor: number; // 已首通的最高层
+}
+
+// ---------- 每日修行任务（v6 新增） ----------
+
+// 每日固定 5 任务 + 全勤宝箱；跨天按 dayKey 重置，进度计数离线挂机同样累计
+export interface DailyQuestsState {
+  dayKey: string;                   // 任务所属日（YYYY-MM-DD）
+  counters: Record<string, number>; // 各任务计数器（kills/wins/rounds/tower/craft）
+  claimed: string[];                // 已领取奖励的任务 id
+  chestClaimed: boolean;            // 全勤宝箱是否已领
 }
 
 // ---------- 游戏主状态 ----------
@@ -458,6 +478,13 @@ export interface GameState {
   bestWinStreak: number;
   // 每日签到
   dailies: DailiesState;
+
+  // 洞府聚灵阵（金币升级，每级全局经验/金币 +1%；转生保留）
+  spiritArray: number;
+
+  // 锁妖塔 / 每日修行任务（v6 新增）
+  tower: TowerState;
+  quests: DailyQuestsState;
 
   // 离线报告（有内容时弹窗）
   pendingOfflineReport: OfflineReport | null;

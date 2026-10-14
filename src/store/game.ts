@@ -44,6 +44,14 @@ import {
 import { ALBUM_REWARDS, isAlbumRewardAvailable } from '@/lib/game/scenes';
 import { getTitleDef, currentSectTitleId, normalizeTitles, WB_KILL_TITLES, hasAllWbTitles, HIDDEN_TITLE_HAOLING } from '@/lib/game/titles';
 import { FORGE_MAP, forgeCostCheck, forgeEquipment, forgeSellPrice } from '@/lib/game/forge';
+import {
+  towerMonster, simulateTowerBattle, towerClearRewards, makeTowerEquip,
+  TowerChallengeReport,
+} from '@/lib/game/tower';
+import {
+  ensureQuests, bumpCounter, QUEST_MAP, questGold, QUEST_CHEST, QUEST_GEMS, isQuestsComplete,
+} from '@/lib/game/quests';
+import { spiritArrayCost } from '@/lib/game/spirit';
 import { formatNum } from '@/components/game/ui-bits';
 
 const emptySkills = (): Record<SkillId, { level: number; xp: number }> => {
@@ -60,6 +68,7 @@ const initialStats = () => ({
   totalGoldEarned: 0, totalExpEarned: 0, totalDrops: 0,
   offlineSessions: 0, playStart: Date.now(),
   petsCaptured: 0, sectContribTotal: 0, wbKills: 0, wbBestDamage: 0,
+  questsDone: 0,
 });
 
 const initialState: GameState = {
@@ -95,6 +104,9 @@ const initialState: GameState = {
   winStreak: 0,
   bestWinStreak: 0,
   dailies: { lastDay: '', streak: 0, best: 0 },
+  spiritArray: 0,
+  tower: { bestFloor: 0 },
+  quests: { dayKey: todayKey(), counters: {}, claimed: [], chestClaimed: false },
   pendingOfflineReport: null,
 };
 
@@ -165,6 +177,16 @@ export interface GameStore extends GameState {
 
   // 世界 BOSS
   applyWorldBossResult: (r: WorldBossAttemptResult) => void;
+
+  // 锁妖塔（仅可挑战下一层；返回战报供面板展示）
+  challengeTower: (floor: number) => TowerChallengeReport | null;
+
+  // 每日修行任务
+  claimQuest: (id: string) => void;
+  claimQuestChest: () => void;
+
+  // 洞府聚灵阵
+  upgradeSpiritArray: () => void;
 
   // 更多面板子视图
   setMoreView: (v: MoreViewId) => void;
@@ -275,6 +297,12 @@ export const useGameStore = create<GameStore>()(
         }
         const rebirth = normalizeRebirth(s.rebirth);
         const now = Date.now();
+        // v6 新增字段兜底：锁妖塔/每日任务/聚灵阵（旧档缺失时钳 0 / 全新一日）
+        const tower = {
+          bestFloor: Math.max(0, Number.isFinite(s.tower?.bestFloor) ? Math.floor(s.tower!.bestFloor) : 0),
+        };
+        const quests = ensureQuests(s.quests, now);
+        const spiritArray = Math.max(0, Number.isFinite(s.spiritArray) ? Math.floor(s.spiritArray as number) : 0);
         // 奇遇/连胜/签到旧档兼容（缺字段兑底；未知类型或已过期的奇遇直接清理）
         const encounter = s.encounter
           && (s.encounter.kind === 'treasure' || s.encounter.kind === 'merchant')
@@ -305,6 +333,7 @@ export const useGameStore = create<GameStore>()(
           albumClaims: s.albumClaims ?? [],
           sect: normalizeSect(s.sect, now),
           activeBuffs: buffs,
+          tower, quests, spiritArray,
           // 已入账的离线报告不持久化：刷新后不再重弹旧报告（收益已在入账时落定）
           pendingOfflineReport: null,
         });
@@ -384,6 +413,12 @@ export const useGameStore = create<GameStore>()(
           setTimeout(() => get().showToast(`📅 每日签到 第 ${streak} 天：+${DAILY_GEMS + bonus}💎${bonus > 0 ? `（连签 ${streak} 天额外 +${bonus}💎）` : ''}`), 50);
         }
 
+        // 每日修行任务：跨天日切（与签到同机制，重置计数/领取状态；markHydrated 已兌底规范化）
+        let quests = state.quests;
+        if (!quests || quests.dayKey !== tKey) {
+          quests = { dayKey: tKey, counters: {}, claimed: [], chestClaimed: false };
+        }
+
         // 过期奇遇清理（宝箱 10 分钟未选 / 商人 90 秒离场）
         const encounter = state.encounter && state.encounter.expireAt > now ? state.encounter : null;
         if (encounter !== state.encounter) {
@@ -412,6 +447,10 @@ export const useGameStore = create<GameStore>()(
               }
               if (r.gem) { gems += 1; }
             }
+            // 每日任务：挂机轮次计数（离线结算同源计入）
+            if (roundsDone > 0) {
+              quests = bumpCounter(quests, 'rounds', roundsDone);
+            }
           }
         }
 
@@ -420,6 +459,7 @@ export const useGameStore = create<GameStore>()(
           gold, gems, skills, inventory,
           activityProgress,
           dailies,
+          ...(quests !== state.quests ? { quests } : {}),
           // 仅在确有收益时写入统计，避免每秒无谓的 stats 对象重建
           ...(roundGold > 0 || roundDrops > 0 ? {
             stats: {
@@ -540,6 +580,13 @@ export const useGameStore = create<GameStore>()(
           sect = grantContribution(sect, monster.isBoss ? CONTRIB_PER_BOSS : CONTRIB_PER_KILL);
         }
 
+        // 每日任务：击杀/胜利计数（离线战斗同源计入）
+        let quests = state.quests;
+        if (won) {
+          quests = bumpCounter(quests, 'kills');
+          quests = bumpCounter(quests, 'wins');
+        }
+
         const stats = {
           ...state.stats,
           totalBattles: state.stats.totalBattles + 1,
@@ -552,7 +599,7 @@ export const useGameStore = create<GameStore>()(
           petsCaptured: (state.stats.petsCaptured ?? 0) + petsCaptured,
         };
 
-        set({ skills, gems: gems + streakGems, inventory, equips, cards, gold, stats, pets, sect, winStreak, bestWinStreak });
+        set({ skills, gems: gems + streakGems, inventory, equips, cards, gold, stats, pets, sect, winStreak, bestWinStreak, ...(quests !== state.quests ? { quests } : {}) });
         if (won) {
           // 奇遇：战斗胜利小概率触发（冷却/占用检查在 action 内）
           get().tryTriggerEncounter('battle');
@@ -753,6 +800,7 @@ export const useGameStore = create<GameStore>()(
 
         let equips = state.equips;
         let toast = '';
+        let quests = state.quests;
         if (recipe.kind === 'cooking' && recipe.outputItemId) {
           inventory = addItem(inventory, recipe.outputItemId, 1);
           const out = getItem(recipe.outputItemId);
@@ -767,8 +815,10 @@ export const useGameStore = create<GameStore>()(
           inventory = addItem(inventory, `equip:${eq.uid}`, 1);
           toast = `锻造出【${eq.name}】！`;
         }
+        // 每日任务：炼制计数（炼丹/锻造均计）
+        quests = bumpCounter(quests, 'craft');
 
-        set({ inventory, skills, gems, equips });
+        set({ inventory, skills, gems, equips, quests });
         get().showToast(toast);
         get().checkAchievements();
         return null;
@@ -1315,12 +1365,16 @@ export const useGameStore = create<GameStore>()(
         // 离线战斗
         let sect = state.sect;
         let pets = state.pets;
+        let quests = state.quests;
         if (report.battleKills > 0) {
           gold += Math.round(report.battleGold * goldMult);
           for (const id of ['hp', 'weaponry', 'power', 'defence', 'speed'] as SkillId[]) {
             const r = grantSkillXp(skills, id, report.battleExp, skills.intellect.level, xpMult);
             gems += r.gems;
           }
+          // 每日任务：离线击杀/胜利同源计数（放置游戏奖励挂机而非惩罚）
+          quests = bumpCounter(quests, 'kills', report.battleKills);
+          quests = bumpCounter(quests, 'wins', report.battleKills);
           for (const d of report.battleDrops) {
             inventory = addItem(inventory, d.itemId, d.qty);
           }
@@ -1345,6 +1399,11 @@ export const useGameStore = create<GameStore>()(
 
         gems += report.gems;
 
+        // 每日任务：离线挂机轮次同源计数
+        if ((report.activityRounds ?? 0) > 0) {
+          quests = bumpCounter(quests, 'rounds', report.activityRounds ?? 0);
+        }
+
         const offlineGold = Math.round(report.gold * goldMult) + Math.round(report.battleGold * goldMult); // 与实际入账同源
         const offlineDrops = report.items.reduce((a, it) => a + it.qty, 0) + report.battleDrops.reduce((a, d) => a + d.qty, 0);
         const stats = {
@@ -1361,12 +1420,137 @@ export const useGameStore = create<GameStore>()(
         set({
           lastTick: now,
           skills, gems, gold, inventory, equips, stats, sect, pets,
+          ...(quests !== state.quests ? { quests } : {}),
           pendingOfflineReport: report,
         });
         get().checkAchievements();
       },
 
       dismissOfflineReport: () => set({ pendingOfflineReport: null }),
+
+      // ---------- 锁妖塔 ----------
+      challengeTower: (floor) => {
+        const state = get();
+        if (!state.initialized || !Number.isFinite(floor)) return null;
+        const f = Math.floor(floor);
+        if (f < 1) return null;
+        // 仅可挑战下一层（首通制：已通层灵气已汲取，无重复收益；跳层拒绝）
+        const best = Math.max(0, state.tower?.bestFloor ?? 0);
+        if (f !== best + 1) return null;
+
+        const monster = towerMonster(f);
+        const pStats = computePlayerStats(state);
+        const sim = simulateTowerBattle(pStats, monster, state.playerName || '无名散修');
+        if (!sim.won) {
+          // 败北无惩罚，不入账任何收益
+          return { ...sim, floor: f, monster, gains: null };
+        }
+
+        // 首通入账：五项战斗技能经验（同野外胜场乘区）+ 金币/宝石/里程碑奖励
+        const rw = towerClearRewards(f);
+        const skills = { ...state.skills };
+        let gems = state.gems;
+        let levelUps = 0;
+        const xpMult = stateXpMult(state);
+        for (const id of ['hp', 'weaponry', 'power', 'defence', 'speed'] as SkillId[]) {
+          const r = grantSkillXp(skills, id, rw.exp, skills.intellect.level, xpMult);
+          gems += r.gems;
+          levelUps += r.levelsGained;
+        }
+        const goldGain = Math.round(rw.gold * stateGoldMult(state));
+        gems += rw.gems;
+
+        let inventory = state.inventory;
+        const equips = { ...state.equips };
+        let drops = 0;
+        for (const it of rw.items) {
+          inventory = addItem(inventory, it.itemId, it.qty);
+          drops += it.qty;
+        }
+        let bagEq: Equipment | null = null;
+        if (rw.bag) {
+          bagEq = makeTowerEquip(rw.bag);
+          equips[bagEq.uid] = bagEq;
+          inventory = addItem(inventory, `equip:${bagEq.uid}`, 1);
+          drops += 1;
+        }
+
+        // 每日任务：塔层首通计数；金币/掉落入累计统计（塔击杀不计入野外击杀口径，防图鉴/万妖成就虚增）
+        const quests = bumpCounter(state.quests, 'tower');
+        const stats = {
+          ...state.stats,
+          totalGoldEarned: state.stats.totalGoldEarned + goldGain,
+          totalDrops: state.stats.totalDrops + drops,
+        };
+        set({
+          skills, gems, inventory, equips, quests, stats,
+          gold: state.gold + goldGain,
+          tower: { bestFloor: f },
+        });
+        // 里程碑提示（面板内已有战报展示，仅大里程碑 toast 强化爽点）
+        if (f % 25 === 0) {
+          get().showToast(`🗼 锁妖塔第 ${f} 层大里程碑！收获丰厚奖励`);
+        }
+        get().checkAchievements();
+        return {
+          ...sim,
+          floor: f,
+          monster,
+          gains: { gold: goldGain, gems: rw.gems, items: rw.items, equip: bagEq, levelUps },
+        };
+      },
+
+      // ---------- 每日修行任务 ----------
+      claimQuest: (id) => {
+        const state = get();
+        const def = QUEST_MAP[id];
+        const quests = state.quests;
+        if (!def || !quests || quests.claimed.includes(id)) return;
+        // 防跨天旧进度领取：目标值按当前状态重算，计数不足直接拒绝
+        const target = def.target(state);
+        if ((quests.counters[def.counter] ?? 0) < target) return;
+        const gold = questGold(state);
+        set({
+          quests: { ...quests, claimed: [...quests.claimed, id] },
+          gold: state.gold + gold,
+          gems: state.gems + QUEST_GEMS,
+          stats: {
+            ...state.stats,
+            totalGoldEarned: state.stats.totalGoldEarned + gold,
+            questsDone: (state.stats.questsDone ?? 0) + 1,
+          },
+        });
+        get().showToast(`📋 完成「${def.name}」：+${formatNum(gold)} 金币 +${QUEST_GEMS}💎`);
+        get().checkAchievements();
+      },
+
+      claimQuestChest: () => {
+        const state = get();
+        const quests = state.quests;
+        if (quests.chestClaimed) return;
+        if (!isQuestsComplete(quests, state)) return;
+        set({
+          quests: { ...quests, chestClaimed: true },
+          inventory: addItem(state.inventory, QUEST_CHEST.itemId, QUEST_CHEST.qty),
+          gems: state.gems + QUEST_CHEST.gems,
+        });
+        get().showToast(`🎁 全勤宝箱：悟道丹 ×1 +${QUEST_CHEST.gems}💎！`);
+        get().checkAchievements();
+      },
+
+      // ---------- 洞府聚灵阵 ----------
+      upgradeSpiritArray: () => {
+        const state = get();
+        const lv = Math.max(0, Math.floor(state.spiritArray ?? 0));
+        const cost = spiritArrayCost(lv);
+        if (state.gold < cost) {
+          get().showToast('金币不足，无法为聚灵阵注灵');
+          return;
+        }
+        set({ spiritArray: lv + 1, gold: state.gold - cost });
+        get().showToast(`🔮 聚灵阵升至 ${lv + 1} 级：全局经验/金币 +${lv + 1}%`);
+        get().checkAchievements();
+      },
     }),
     {
       name: 'xiantu-idle-save-v1',

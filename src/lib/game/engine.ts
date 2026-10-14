@@ -13,6 +13,7 @@ import { petBonus } from './pets';
 import { refineMainMult, refineAffixMult } from './refine';
 import { sectLevelBonus, getSectMembers } from './sects';
 import { BONUS_XP_PER_POINT, BONUS_STAT_PER_POINT } from './rebirth';
+import { spiritArrayMult } from './spirit';
 
 // ---------- 属性计算 ----------
 
@@ -62,7 +63,7 @@ export function activeBuffFlat(state: GameState, key: ActiveBuffKey): number {
   return sum;
 }
 
-// 技能经验额外乘区：转生点数（+1%/点） + 宗门剑修加成（含宗门等级） + 灵气爆发奇遇 buff
+// 技能经验额外乘区：转生点数（+1%/点） + 宗门剑修加成（含宗门等级） + 聚灵阵（+1%/级） + 灵气爆发奇遇 buff
 export function stateXpMult(state: GameState): number {
   const points = state.rebirth?.points ?? 0;
   let mult = 1 + points * BONUS_XP_PER_POINT;
@@ -70,19 +71,21 @@ export function stateXpMult(state: GameState): number {
     const { level } = getSectMembers(state);
     mult += 0.12 + sectLevelBonus(level);
   }
+  // 洞府聚灵阵：每级全局经验 +1%（旧档缺 spiritArray 字段由 ?? 0 兑底）
+  mult *= spiritArrayMult(state.spiritArray ?? 0);
   // 灵气爆发奇遇：限时经验 +100%（activeBuffMult 对过期 buff 自动免疫）
   mult *= activeBuffMult(state, 'exp');
   return mult;
 }
 
-// 金币收益乘区：万宝楼 +25%（含宗门等级） × 聚财丹 buff
+// 金币收益乘区：万宝楼 +25%（含宗门等级） × 聚财丹 buff × 聚灵阵（+1%/级）
 export function stateGoldMult(state: GameState): number {
   let mult = 1;
   if (state.sect?.sectId === 'vault') {
     const { level } = getSectMembers(state);
     mult += 0.25 + sectLevelBonus(level);
   }
-  return mult * activeBuffMult(state, 'gold');
+  return mult * activeBuffMult(state, 'gold') * spiritArrayMult(state.spiritArray ?? 0);
 }
 
 // 灵宠加成乘区：万兽门 +30%（含宗门等级）
@@ -309,6 +312,7 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
   let battleKills = 0;
   let battleExp = 0;
   let battleGold = 0;
+  let activityRounds = 0; // 挂机活动完成轮次（每日修行任务计数用）
   const battleDrops: { itemId: string; qty: number }[] = [];
 
   // 1. 挂机活动（采集类）
@@ -317,6 +321,7 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
     if (act) {
       const rounds = Math.floor((seconds * eff) / act.intervalSec);
       if (rounds > 0) {
+        activityRounds += rounds;
         skillXp[act.skillId] = (skillXp[act.skillId] ?? 0) + rounds * act.skillXp;
         if (act.reward.gold) {
           // 化缘金币与在线同源：随化缘等级成长（修复：此前离线固定 25/轮，
@@ -422,6 +427,7 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
     battleDrops,
     gems,
     petXp,
+    activityRounds,
   };
 }
 

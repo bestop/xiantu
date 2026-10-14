@@ -10,8 +10,10 @@ import { realmAvatar } from '@/lib/game/realms';
 import { SECT_MAP } from '@/lib/game/sects';
 import { rebirthPrefix } from '@/lib/game/rebirth';
 import { activeTitleName } from '@/lib/game/titles';
+import { QUESTS, QUEST_GEMS, QUEST_CHEST, questGold, isQuestsComplete } from '@/lib/game/quests';
+import { spiritArrayCost, SPIRIT_BONUS_PER_LEVEL } from '@/lib/game/spirit';
 import { Section, ProgressBar, StatPill, ActionButton, formatNum, formatDuration } from './ui-bits';
-import { QUALITY_TEXT } from '@/lib/game/items';
+import { getItem, QUALITY_TEXT } from '@/lib/game/items';
 import { refineMainMult } from '@/lib/game/refine';
 import { ACTIVITY_SCENE, HOME_SCENE } from '@/lib/game/scenes';
 import { cn } from '@/lib/utils';
@@ -118,6 +120,9 @@ export function HomePanel() {
         </div>
       </Section>
 
+      {/* 今日修行（每日任务 + 全勤宝箱；离线挂机同样计数） */}
+      <DailyQuestsSection />
+
       {/* 出战灵宠 */}
       {(() => {
         const pets = state.pets ?? [];
@@ -212,6 +217,33 @@ export function HomePanel() {
         </div>
       </Section>
 
+      {/* 洞府聚灵阵（金币升级，全局收益加成；转生保留） */}
+      <Section title="洞府">
+        {(() => {
+          const lv = Math.max(0, Math.floor(state.spiritArray ?? 0));
+          const cost = spiritArrayCost(lv);
+          const affordable = state.gold >= cost;
+          return (
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 shrink-0 rounded-lg border border-violet-800/50 bg-violet-950/40 flex items-center justify-center text-2xl" aria-hidden>🔮</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-violet-200">聚灵阵 <span className="text-[10px] text-stone-500">Lv.{lv}</span></div>
+                  <div className="text-[10px] text-stone-500 mt-0.5">
+                    全局技能经验与金币收益 +{lv}%（战斗 · 挂机 · 离线同享）
+                    {lv > 0 && <span className="text-violet-400"> · 每级 +{Math.round(SPIRIT_BONUS_PER_LEVEL * 100)}%</span>}
+                  </div>
+                </div>
+              </div>
+              <ActionButton className="w-full mt-2.5" disabled={!affordable} onClick={() => state.upgradeSpiritArray()}>
+                {affordable ? `注灵升级至 Lv.${lv + 1}（🪙 ${formatNum(cost)}）` : `金币不足（需 🪙 ${formatNum(cost)}）`}
+              </ActionButton>
+              <div className="text-[10px] text-stone-600 text-center mt-1.5">洞府建筑不随转生损毁，费用随等级递增</div>
+            </div>
+          );
+        })()}
+      </Section>
+
       {/* 生涯统计 */}
       <Section title="生涯统计">
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-stone-300">
@@ -225,6 +257,8 @@ export function HomePanel() {
           <div className="flex justify-between"><span className="text-stone-500">离线次数</span><span className="tabular-nums">{formatNum(state.stats.offlineSessions)}</span></div>
           <div className="flex justify-between"><span className="text-stone-500">灵宠收服</span><span className="tabular-nums">{formatNum(state.stats.petsCaptured ?? 0)}</span></div>
           <div className="flex justify-between"><span className="text-stone-500">世界 BOSS 击杀</span><span className="tabular-nums">{formatNum(state.stats.wbKills ?? 0)}</span></div>
+          <div className="flex justify-between"><span className="text-stone-500">锁妖塔首通</span><span className="tabular-nums">{formatNum(Math.max(0, state.tower?.bestFloor ?? 0))} 层</span></div>
+          <div className="flex justify-between"><span className="text-stone-500">每日任务完成</span><span className="tabular-nums">{formatNum(state.stats.questsDone ?? 0)} 次</span></div>
         </div>
       </Section>
 
@@ -235,8 +269,74 @@ export function HomePanel() {
           <li>· 生活技能在「技能」页选择活动修炼，离线也会继续修行。</li>
           <li>· 技能每升 1 级送 1 颗宝石，成就与寻宝也能获得宝石。</li>
           <li>· 装备词条完全随机，气运越高掉落越稀有。</li>
+          <li>· 锁妖塔逐层首通有赏，每日修行任务全勤开宝箱，聚灵阵用金币升级全局收益。</li>
         </ul>
       </Section>
     </div>
+  );
+}
+
+// ---- 今日修行（每日任务列表 + 全勤宝箱） ----
+function DailyQuestsSection() {
+  const state = useGameStore();
+  const quests = state.quests;
+  const gold = questGold(state);
+  const doneCount = QUESTS.filter(q => (quests.counters[q.counter] ?? 0) >= q.target(state)).length;
+  const complete = isQuestsComplete(quests, state);
+  const chestItem = getItem(QUEST_CHEST.itemId);
+
+  return (
+    <Section title="今日修行" extra={
+      <span className="text-[10px] text-stone-500 tabular-nums">{doneCount}/{QUESTS.length} · 单项 🪙{formatNum(gold)} +{QUEST_GEMS}💎</span>
+    }>
+      <div className="space-y-2">
+        {QUESTS.map(q => {
+          const target = q.target(state);
+          const cur = Math.min(target, quests.counters[q.counter] ?? 0);
+          const claimed = quests.claimed.includes(q.id);
+          const ready = !claimed && cur >= target;
+          return (
+            <div key={q.id} className="flex items-center gap-2.5 bg-stone-800/40 border border-stone-800 rounded-lg px-2.5 py-2">
+              <span className="text-xl shrink-0" aria-hidden>{q.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-xs font-medium text-stone-200">{q.name}</span>
+                  <span className="text-[10px] text-stone-500 tabular-nums shrink-0">{cur}/{target}</span>
+                </div>
+                <ProgressBar value={cur} max={target} className="h-1.5 mt-1"
+                  barClass={claimed ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : undefined} />
+                <div className="text-[9px] text-stone-600 mt-0.5">{q.targetText(target)}{claimed ? ' · 已完成' : ''}</div>
+              </div>
+              {claimed ? (
+                <span className="text-[10px] text-emerald-400 shrink-0 px-1">✓ 已领</span>
+              ) : ready ? (
+                <ActionButton className="!min-h-[36px] !px-3 text-xs shrink-0" onClick={() => state.claimQuest(q.id)}>领取</ActionButton>
+              ) : null}
+            </div>
+          );
+        })}
+
+        {/* 全勤宝箱 */}
+        <div className={cn('flex items-center gap-2.5 rounded-lg px-2.5 py-2 border',
+          quests.chestClaimed
+            ? 'border-emerald-900/60 bg-emerald-950/20'
+            : complete
+              ? 'border-amber-700/60 bg-amber-950/30'
+              : 'border-stone-800 bg-stone-900/40')}>
+          <span className="text-xl shrink-0" aria-hidden>🎁</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-stone-200">全勤宝箱</div>
+            <div className="text-[9px] text-stone-500">五项任务全部完成：{chestItem?.icon}{chestItem?.name ?? QUEST_CHEST.itemId} ×{QUEST_CHEST.qty} + {QUEST_CHEST.gems}💎</div>
+          </div>
+          {quests.chestClaimed ? (
+            <span className="text-[10px] text-emerald-400 shrink-0 px-1">✓ 已领</span>
+          ) : complete ? (
+            <ActionButton className="!min-h-[36px] !px-3 text-xs shrink-0" onClick={() => state.claimQuestChest()}>领取</ActionButton>
+          ) : (
+            <span className="text-[10px] text-stone-600 shrink-0 px-1">{doneCount}/{QUESTS.length}</span>
+          )}
+        </div>
+      </div>
+    </Section>
   );
 }
