@@ -422,9 +422,10 @@ function GearDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
           <>
             <div className="text-[11px] text-stone-400 space-y-1 leading-relaxed mb-2.5">
               <p>· 消耗灵矿与金币炼化装备：主属性 <b className="text-amber-300">+12%</b>/级，副词条 <b className="text-amber-300">+6%</b>/级。</p>
-              <p>· 成功率随等级下降，失败仅折损材料，装备无损、不降级。</p>
+              <p>· 成功率随炼器等级下降（最低 55%），失败仅折损材料，装备无损、不降级。</p>
             </div>
-            <ProgressBar value={rate * 100} max={100} className="h-2.5" barClass="bg-gradient-to-r from-cyan-600 to-cyan-400" showText />
+            {/* 取整口径与按钮一致用 round：refine=1 时浮点 90.9999 会被 floor 成 90，与按钮「成功率 91%」矛盾 */}
+            <ProgressBar value={Math.round(rate * 100)} max={100} className="h-2.5" barClass="bg-gradient-to-r from-cyan-600 to-cyan-400" showText />
             <div className="flex items-center justify-between mt-2 text-[11px]">
               <span className={cn('text-stone-400', !oreOk && 'text-red-400')}>
                 {refineOreName(eq)} {oreHave}/{cost.oreQty}

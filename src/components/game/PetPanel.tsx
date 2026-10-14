@@ -52,7 +52,7 @@ export function PetPanel({ onBack }: { onBack: () => void }) {
         <div className="text-[11px] text-stone-400 space-y-1 leading-relaxed">
           <p>· 战胜妖兽后小概率<b className="text-emerald-300">收服为灵宠</b>，出战提供属性加成并随战斗成长。</p>
           <p>· <b className="text-cyan-300">进化</b>：等级达标后消耗金币与妖丹，凡兽 → 灵兽 → 仙兽 → 神兽，属性大幅提升。</p>
-          <p>· <b className="text-amber-300">融合</b>：吞噬一只<b>同种</b>妖兽升一星（上限 {MAX_PET_STARS} 星），每星全属性 +{Math.round(STAR_BONUS_PER * 100)}%。</p>
+          <p>· <b className="text-amber-300">融合</b>：吞噬一只<b>同种</b>妖兽升星（+1 星，祭品星级一并继承，上限 {MAX_PET_STARS} 星），每星全属性 +{Math.round(STAR_BONUS_PER * 100)}%。</p>
           <p>· 放生灵宠可换取金币，进化与星级越高越值钱。</p>
         </div>
       </Section>
@@ -202,7 +202,10 @@ function FuseSelector({ mainUid, onCancel, onDone }: {
   const main = (store.pets ?? []).find(p => p.uid === mainUid);
   if (!main) return null;
   const m = MONSTER_MAP[main.monsterId];
-  const candidates = (store.pets ?? []).filter(p => p.monsterId === main.monsterId && p.uid !== mainUid);
+  // 高星祭品优先展示（星级守恒规则下收益更大），同级按低级优先
+  const candidates = (store.pets ?? [])
+    .filter(p => p.monsterId === main.monsterId && p.uid !== mainUid)
+    .sort((a, b) => b.stars - a.stars || a.level - b.level);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={onCancel}>
@@ -213,12 +216,15 @@ function FuseSelector({ mainUid, onCancel, onDone }: {
           <button onClick={onCancel} className="text-stone-400 min-h-[36px] min-w-[36px] rounded-lg hover:bg-stone-800" aria-label="关闭">✕</button>
         </div>
         <div className="text-[11px] text-stone-400 leading-relaxed">
-          选择一只<b className="text-amber-300">同种</b>妖兽作为祭品，主宠 {petDisplayName(main)} 将升为
-          <b className="text-amber-300"> {main.stars + 1} 星</b>（全属性 +{Math.round(STAR_BONUS_PER * 100)}%）。祭品灵宠将消失，其等级不计入主宠。
+          选择一只<b className="text-amber-300">同种</b>妖兽作为祭品，主宠 {petDisplayName(main)} 将升星
+          （+1 星，祭品<b className="text-amber-300">星级一并继承</b>，上限 {MAX_PET_STARS} 星，每星全属性 +{Math.round(STAR_BONUS_PER * 100)}%）。
+          祭品灵宠将消失，其等级不计入主宠。
         </div>
         <div className="space-y-1.5 max-h-72 overflow-y-auto overscroll-contain">
           {candidates.map(p => {
             const lv = p.level;
+            // 融合结果预览：星级守恒（主宠 + 1 + 祭品，钳五星上限），与 store.fusePet 同式
+            const resultStars = Math.min(MAX_PET_STARS, main.stars + 1 + p.stars);
             return (
               <button key={p.uid}
                 onClick={() => setFuseUid(p.uid)}
@@ -226,8 +232,13 @@ function FuseSelector({ mainUid, onCancel, onDone }: {
                   fuseUid === p.uid ? 'bg-amber-950/60 border-amber-700' : 'bg-stone-800/40 border-stone-800 hover:border-stone-700')}>
                 <span className="text-2xl" aria-hidden>{m.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs text-stone-200 font-semibold">Lv.{lv} {petDisplayName(p)}</div>
-                  <div className="text-[10px] text-stone-500">{p.stars > 0 ? `${'★'.repeat(p.stars)} ` : ''}将作为祭品被吞噬</div>
+                  <div className="text-xs text-stone-200 font-semibold">
+                    Lv.{lv} {petDisplayName(p)}
+                    {p.stars > 0 && <span className="text-amber-400 ml-1" aria-label={`${p.stars}星`}>{'★'.repeat(p.stars)}</span>}
+                  </div>
+                  <div className="text-[10px] text-stone-500">
+                    融合后主宠升至 <span className="text-amber-300 font-semibold">{'★'.repeat(resultStars)}</span> · 祭品将消失
+                  </div>
                 </div>
                 {fuseUid === p.uid && <span className="text-amber-400 text-xs">已选中</span>}
               </button>

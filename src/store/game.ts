@@ -953,13 +953,19 @@ export const useGameStore = create<GameStore>()(
         if (main.monsterId !== sac.monsterId) return '仅同种妖兽方可融合';
         if (main.stars >= MAX_PET_STARS) return '已达五星上限';
 
+        // 星级守恒融合（修复：此前祭品星级被无声丢弃——误以高星同族为祭品会永久蒸发
+        // 已有星级，且 petMaxStars 成就按存栏推导随之回退）。新规则：主宠新星数 =
+        // 主宠 + 1 + 祭品（钳五星上限）。每次融合星质量仍净增 +1，6 只同族 → 5★ 的
+        // 成本不变，无通货膨胀；附带效果：高星祭品可整体迁移星级到主宠，任何融合
+        // 分支都不再毁星。
+        const newStars = Math.min(MAX_PET_STARS, main.stars + 1 + sac.stars);
         let pets = state.pets.filter(p => p.uid !== sacrificeUid);
-        pets = pets.map(p => p.uid === mainUid ? { ...p, stars: p.stars + 1 } : p);
+        pets = pets.map(p => p.uid === mainUid ? { ...p, stars: newStars } : p);
         set({
           pets,
           activePetUid: state.activePetUid === sacrificeUid ? mainUid : state.activePetUid,
         });
-        get().showToast(`✨ 融合成功！${petDisplayName(main)} 升至 ${main.stars + 1} 星`);
+        get().showToast(`✨ 融合成功！${petDisplayName(main)} 升至 ${newStars} 星`);
         get().checkAchievements();
         return null;
       },
