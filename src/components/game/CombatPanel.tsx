@@ -146,6 +146,8 @@ export function CombatPanel() {
   const startBattle = useCallback((monster: MonsterDef) => {
     clearTimer();
     const ps = statsRef.current;
+    // 记录最近战斗妖兽：切页/刷新后自动续战的锚点（持久化，markHydrated 校验合法性）
+    useGameStore.getState().setLastBattleMonster(monster.id);
     battleRef.current = {
       monsterId: monster.id,
       player: { name: useGameStore.getState().playerName, icon: '🧙', maxHp: ps.maxHp, hp: ps.maxHp, atk: ps.atk, def: ps.def, speed: ps.speed },
@@ -199,6 +201,19 @@ export function CombatPanel() {
 
   // 卸载清理
   useEffect(() => clearTimer, [clearTimer]);
+
+  // 挂载自动续战（修复：战斗状态/计时器全在组件局部，切页卸载后自动战斗断档）：
+  // 自动战斗开启时，返回战斗页立即接续上一场妖兽；后台 tick 在非战斗页期间已持续讨伐，
+  // 此处负责把循环交还给 UI。lastBattleMonsterId 为空（从未手动开战）则不自动开打。
+  useEffect(() => {
+    const s = useGameStore.getState();
+    if (!s.autoBattleEnabled) return;
+    const mid = s.lastBattleMonsterId;
+    const m = mid ? MONSTER_MAP[mid] : null;
+    if (m) startBattleRef.current?.(m);
+    // 仅首挂载执行一次（依赖数组刻意留空）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 战斗日志自动滚动（跟随最后一条日志 id；依赖 length 会在 60 条裁剪后失效）
   const lastLogId = battle && battle.log.length > 0 ? battle.log[battle.log.length - 1].id : 0;
@@ -375,7 +390,7 @@ export function CombatPanel() {
       </div>
 
       {store.autoBattleEnabled && (
-        <div className="text-[10px] text-amber-400/80 text-center">自动战斗已开启：胜利后自动挑战同一妖兽</div>
+        <div className="text-[10px] text-amber-400/80 text-center">自动战斗已开启：胜利后自动挑战同一妖兽；切至其他页签后台持续讨伐，离线也照常挂机</div>
       )}
 
       {/* 当前区域场景横幅 */}
@@ -424,7 +439,7 @@ export function CombatPanel() {
           <span className="text-xl" aria-hidden>🤖</span>
           <span className="text-left">
             <span className="block text-xs font-semibold text-stone-200">自动战斗</span>
-            <span className="block text-[10px] text-stone-500">在线连续挑战 · 离线时也自动挂机战斗</span>
+            <span className="block text-[10px] text-stone-500">连续挑战 · 切页后台继续讨伐 · 离线也自动挂机</span>
           </span>
         </span>
         <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition',

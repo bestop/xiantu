@@ -7,7 +7,7 @@
 import { GameState } from '@/types/game';
 import { SkillId } from '@/types/game';
 
-export type SceneKind = 'home' | 'region' | 'activity' | 'boss';
+export type SceneKind = 'home' | 'region' | 'activity' | 'boss' | 'tower';
 
 export interface SceneDef {
   id: string;
@@ -16,6 +16,7 @@ export interface SceneDef {
   caption: string;   // 明信片短句（青蛙旅行照风格）
   img: string;       // public 下路径
   // kind=region → 区域 id；kind=activity → 活动对应技能 id
+  // kind=boss → 妖王名；kind=tower → 收录所需首通层数
   refId?: string;
 }
 
@@ -156,6 +157,27 @@ export const SCENES: SceneDef[] = [
     id: 'wb-zangtian', kind: 'boss', refId: '葬天仙帝', name: '葬天仙帝', img: '/scenes/wb-emperor.png',
     caption: '帝影垂目看我，我抬头看他——谁先眨眼，谁就输了。',
   },
+  // ---- 锁妖塔（refId = 收录所需首通层数） ----
+  {
+    id: 'tower-gate', kind: 'tower', refId: '1', name: '塔门初启', img: '/scenes/tower-gate.png',
+    caption: '塔门在身后缓缓合上，第一层的风比想象中冷。',
+  },
+  {
+    id: 'tower-hall', kind: 'tower', refId: '10', name: '塔中石殿', img: '/scenes/tower-hall.png',
+    caption: '石殿里只有一盏灯，替历代镇塔人亮着。我也帮它拔了拔灯芯。',
+  },
+  {
+    id: 'tower-lantern', kind: 'tower', refId: '25', name: '万妖灯廊', img: '/scenes/tower-lantern.png',
+    caption: '长廊两侧的灯笼里，各睡着一只小妖。脚步放轻些，别吵醒它们。',
+  },
+  {
+    id: 'tower-cloud', kind: 'tower', refId: '50', name: '塔顶云海', img: '/scenes/tower-cloud.png',
+    caption: '爬到塔顶才发现，云海就在脚边，软得像我泡的那碗面。',
+  },
+  {
+    id: 'tower-seal', kind: 'tower', refId: '100', name: '塔尖封印', img: '/scenes/tower-seal.png',
+    caption: '塔尖的封印之光很安静。我把它画下来，寄给你。',
+  },
 ];
 
 export const SCENE_MAP: Record<string, SceneDef> = Object.fromEntries(
@@ -179,8 +201,37 @@ export const WB_SCENES_BY_BOSS: Record<string, SceneDef> = Object.fromEntries(
   SCENES.filter(s => s.kind === 'boss' && s.refId).map(s => [s.refId!, s])
 );
 
+// 锁妖塔画境（按收录所需层数升序）
+export const TOWER_SCENES: SceneDef[] = SCENES
+  .filter(s => s.kind === 'tower' && s.refId)
+  .sort((a, b) => Number(a.refId) - Number(b.refId));
+
 export function bossScene(bossName: string): SceneDef {
   return WB_SCENES_BY_BOSS[bossName] ?? BOSS_SCENE;
+}
+
+// 锁妖塔画境解锁：首通达到 refId 指定层数即收录
+export function isTowerSceneUnlocked(requiredFloor: number, state: GameState): boolean {
+  return (state.tower?.bestFloor ?? 0) >= requiredFloor;
+}
+
+// 塔面板横幅：已达的最高画境（按所需层数升序取最后一个已解锁）
+export function currentTowerScene(state: GameState): SceneDef | null {
+  let cur: SceneDef | null = null;
+  for (const s of TOWER_SCENES) {
+    const f = Number(s.refId);
+    if (Number.isFinite(f) && isTowerSceneUnlocked(f, state)) cur = s;
+  }
+  return cur;
+}
+
+// 下一个待解锁画境（塔面板预告/锁定提示用）
+export function nextTowerScene(state: GameState): SceneDef | null {
+  for (const s of TOWER_SCENES) {
+    const f = Number(s.refId);
+    if (Number.isFinite(f) && !isTowerSceneUnlocked(f, state)) return s;
+  }
+  return null;
 }
 
 // ---------- 解锁逻辑（无新增存档字段，全部由现有状态推导） ----------
@@ -199,6 +250,7 @@ export function isActivitySceneUnlocked(skillId: string, state: GameState): bool
 // 世界 BOSS 明信片：
 // - 通用画境（无 refId）：挑战过一次即收录（本期造成过伤害，或历史击杀）
 // - 妖王专属画境（refId=boss.name）：击杀对应妖王后收录（与妖王称号图鉴同口径）
+// 锁妖塔画境（refId=层数）：首通达到对应层数即收录
 export function isBossSceneUnlocked(state: GameState): boolean {
   return state.worldBoss.seasonDamage > 0 || (state.stats.wbKills ?? 0) > 0;
 }
@@ -214,6 +266,7 @@ export function isSceneUnlocked(scene: SceneDef, state: GameState): boolean {
     case 'activity': return scene.refId ? isActivitySceneUnlocked(scene.refId, state) : false;
     // 有 refId 的是妖王专属画境，须击杀对应妖王；无 refId 的通用画境挑战一次即收录
     case 'boss': return scene.refId ? isBossRefSceneUnlocked(scene.refId, state) : isBossSceneUnlocked(state);
+    case 'tower': return scene.refId ? isTowerSceneUnlocked(Number(scene.refId), state) : false;
   }
 }
 
@@ -228,6 +281,7 @@ export function sceneUnlockHint(scene: SceneDef): string {
     case 'activity': return '修行此项活动后收录';
     // 妖王专属画境与通用画境的解锁条件不同，提示分别对齐
     case 'boss': return scene.refId ? '击杀该妖王后收录' : '挑战世界 BOSS 后收录';
+    case 'tower': return scene.refId ? `首通第 ${scene.refId} 层后收录` : '挑战锁妖塔后收录';
     default: return '';
   }
 }
@@ -247,6 +301,7 @@ export interface AlbumReward {
 export const ALBUM_REWARDS: AlbumReward[] = [
   { id: 'album_home', kind: 'home', name: '洞府常客', gems: 10, desc: '收录「我的洞府」全部分页' },
   { id: 'album_boss', kind: 'boss', name: '直面巨兽', gems: 10, desc: '收录「强敌之影」全部分页' },
+  { id: 'album_tower', kind: 'tower', name: '镇塔修士', gems: 25, titleId: 'title_zhenta', titleName: '镇塔修士', desc: '收录「锁妖塔影」全部 5 张明信片' },
   { id: 'album_region', kind: 'region', name: '山河行者', gems: 30, titleId: 'title_shanhe', titleName: '山河行者', desc: '收录「行走山河」全部 10 张明信片' },
   { id: 'album_activity', kind: 'activity', name: '修行百艺', gems: 40, titleId: 'title_baiyi', titleName: '百艺修士', desc: '收录「修行手记」全部 11 张明信片' },
   { id: 'album_grand', kind: 'grand', name: '画圣·山河印心', gems: 100, titleId: 'title_huasheng', titleName: '画圣·山河印心', desc: '集齐整本山河画册（限定称号）' },

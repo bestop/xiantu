@@ -38,6 +38,7 @@ export const HIDDEN_TITLE_HAOLING: TitleDef = {
 export const FIXED_TITLES: TitleDef[] = [
   { id: 'title_shanhe', name: '山河行者', desc: '集齐画册「行走山河」全部明信片' },
   { id: 'title_baiyi', name: '百艺修士', desc: '集齐画册「修行手记」全部明信片' },
+  { id: 'title_zhenta', name: '镇塔修士', desc: '集齐画册「锁妖塔影」全部明信片' },
   { id: 'title_huasheng', name: '画圣·山河印心', desc: '集齐整本山河画册（限定）' },
   ...Object.values(WB_KILL_TITLES),
   ...REBIRTH_TITLES.map(t => ({ id: t.id, name: t.name, desc: `转生 ${t.count} 次达成` })),

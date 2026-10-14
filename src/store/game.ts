@@ -16,6 +16,7 @@ import {
   computePlayerStats, grantSkillXp, computeOfflineReport, resolveDynamicItemId,
   activityRoundReward, pendingOfflineEquips, getShopEntries, openEquipBag,
   stateXpMult, stateGoldMult, avgCombatLevel,
+  pickAutoTarget, autoBattleSeconds, computeOfflineEfficiency, rollDrops,
 } from '@/lib/game/engine';
 import {
   ENCOUNTER_BATTLE_CHANCE, ENCOUNTER_ACTIVITY_CHANCE, ENCOUNTER_COOLDOWN_MS,
@@ -41,7 +42,7 @@ import {
 import {
   initialRebirth, normalizeRebirth, canRebirth, rebirthPointsGain, REBIRTH_TITLES,
 } from '@/lib/game/rebirth';
-import { ALBUM_REWARDS, isAlbumRewardAvailable } from '@/lib/game/scenes';
+import { ALBUM_REWARDS, isAlbumRewardAvailable, TOWER_SCENES } from '@/lib/game/scenes';
 import { getTitleDef, currentSectTitleId, normalizeTitles, WB_KILL_TITLES, hasAllWbTitles, HIDDEN_TITLE_HAOLING } from '@/lib/game/titles';
 import { FORGE_MAP, forgeCostCheck, forgeEquipment, forgeSellPrice } from '@/lib/game/forge';
 import {
@@ -87,6 +88,11 @@ const initialState: GameState = {
   cards: {},
   lastRegionId: 'r1',
   autoBattleEnabled: false,
+  lastBattleMonsterId: null,
+  bgBattleAcc: 0,
+  bgTargetId: null,
+  bgTargetCheckAt: 0,
+  bgKills: 0,
   activeBuffs: [],
   achievements: {},
   stats: initialStats(),
@@ -131,6 +137,7 @@ export interface GameStore extends GameState {
   // 战斗
   setRegion: (regionId: string) => void;
   toggleAutoBattle: () => void;
+  setLastBattleMonster: (id: string | null) => void;
   applyBattleResult: (monsterId: string, won: boolean, rewards: BattleRewards) => void;
 
   // 物品
@@ -334,6 +341,11 @@ export const useGameStore = create<GameStore>()(
           sect: normalizeSect(s.sect, now),
           activeBuffs: buffs,
           tower, quests, spiritArray,
+          // 最近战斗妖兽 id 兼容：坏档/跨版本残留的非法 id 复位为 null（续战入口会自动跳过）
+          lastBattleMonsterId: (s.lastBattleMonsterId && MONSTER_MAP[s.lastBattleMonsterId])
+            ? s.lastBattleMonsterId : null,
+          // 后台战斗瞬态字段不入档，hydrate 时归零（partials 已排除，这里双保险）
+          bgBattleAcc: 0, bgTargetId: null, bgTargetCheckAt: 0, bgKills: 0,
           // 已入账的离线报告不持久化：刷新后不再重弹旧报告（收益已在入账时落定）
           pendingOfflineReport: null,
         });
@@ -475,6 +487,41 @@ export const useGameStore = create<GameStore>()(
           get().tryTriggerEncounter('activity');
         }
 
+        // 页签后台自动战斗（修复：此前战斗循环全在 CombatPanel 组件局部，切页即卸载中断，
+        // 自动战斗只剩离线结算一个入口）。战斗页不在前台时，由 tick 按离线同款模型持续讨伐：
+        // 收益路径与在线 UI 战斗完全同源（rollDrops → applyBattleResult：技能经验/宠物经验/
+        // 掉落/连胜/宗门贡献/任务计数/成就）。⚠️ 必须在上方主 set 之后执行——
+        // applyBattleResult 以最新 state 入账，若在主 set 之前调用会被旧快照覆盖写入。
+        if (state.autoBattleEnabled && state.tab !== 'combat') {
+          // 目标怪缓存：每 15s 重算一次（3 局稳定胜模拟较重，不能每秒跑）
+          let targetId = state.bgTargetId;
+          let bgTargetCheckAt = state.bgTargetCheckAt;
+          if (!targetId || !MONSTER_MAP[targetId] || now - bgTargetCheckAt > 15000) {
+            const t = pickAutoTarget(state);
+            targetId = t ? t.id : null;
+            bgTargetCheckAt = now;
+          }
+          const target = targetId ? MONSTER_MAP[targetId] : null;
+          if (target) {
+            const pStats = computePlayerStats(state);
+            const battleSec = autoBattleSeconds(pStats, target);
+            let acc = state.bgBattleAcc + deltaSec * computeOfflineEfficiency(state);
+            let kills = 0;
+            while (acc >= battleSec && kills < 30) { // 单 tick 击杀上限防爆发
+              acc -= battleSec;
+              kills++;
+              const rewards = rollDrops(target, get(), pStats.luck);
+              get().applyBattleResult(target.id, true, rewards);
+            }
+            if (kills > 0) {
+              set({ bgKills: get().bgKills + kills });
+            }
+            set({ bgBattleAcc: acc, bgTargetId: targetId, bgTargetCheckAt });
+          } else {
+            set({ bgTargetId: null, bgTargetCheckAt: now });
+          }
+        }
+
         // 定期检查成就（每 5 秒）
         if (Math.floor(now / 1000) % 5 === 0 || levelUps > 0) {
           get().checkAchievements();
@@ -493,6 +540,7 @@ export const useGameStore = create<GameStore>()(
       // ---------- 战斗 ----------
       setRegion: (regionId) => set({ lastRegionId: regionId }),
       toggleAutoBattle: () => set(s => ({ autoBattleEnabled: !s.autoBattleEnabled })),
+      setLastBattleMonster: (id) => set({ lastBattleMonsterId: id }),
 
       applyBattleResult: (monsterId, won, rewards) => {
         const state = get();
@@ -1422,6 +1470,8 @@ export const useGameStore = create<GameStore>()(
           skills, gems, gold, inventory, equips, stats, sect, pets,
           ...(quests !== state.quests ? { quests } : {}),
           pendingOfflineReport: report,
+          // 空窗期收益已由离线报告整段结算，后台战斗累计器清零防重复计入
+          bgBattleAcc: 0,
         });
         get().checkAchievements();
       },
@@ -1491,6 +1541,11 @@ export const useGameStore = create<GameStore>()(
         if (f % 25 === 0) {
           get().showToast(`🗼 锁妖塔第 ${f} 层大里程碑！收获丰厚奖励`);
         }
+        // 塔中画境收录提示：本次首通恰好跨过某张画境所需层数时提示（画境按层数解锁，无存档字段）
+        const newScene = TOWER_SCENES.find(s => Number(s.refId) === f);
+        if (newScene) {
+          setTimeout(() => get().showToast(`🖼️ 画境「${newScene.name}」已收录进山河画册`), 200);
+        }
         get().checkAchievements();
         return {
           ...sim,
@@ -1556,9 +1611,15 @@ export const useGameStore = create<GameStore>()(
       name: 'xiantu-idle-save-v1',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => {
-        const { hydrated, toast, toastSeq, pendingOfflineReport, ...rest } = state;
+        const {
+          hydrated, toast, toastSeq, pendingOfflineReport,
+          // 后台自动战斗瞬态字段不入档（会话内 tick 自行维护）
+          bgBattleAcc, bgTargetId, bgTargetCheckAt, bgKills,
+          ...rest
+        } = state;
         void hydrated; void toast; void toastSeq; void pendingOfflineReport;
-        return rest as Omit<GameState, 'pendingOfflineReport'>;
+        void bgBattleAcc; void bgTargetId; void bgTargetCheckAt; void bgKills;
+        return rest as Omit<GameState, 'pendingOfflineReport' | 'bgBattleAcc' | 'bgTargetId' | 'bgTargetCheckAt' | 'bgKills'>;
       },
       onRehydrateStorage: () => (state) => {
         // 水合完成后标记

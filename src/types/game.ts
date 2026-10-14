@@ -443,6 +443,13 @@ export interface GameState {
   // 战斗
   lastRegionId: string;
   autoBattleEnabled: boolean;
+  // 最近一场战斗的妖兽 id（回到战斗页自动续战用；随存档持久化）
+  lastBattleMonsterId: string | null;
+  // 页签后台自动战斗瞬态（不持久化，tick 驱动）
+  bgBattleAcc: number;        // 距下一场后台胜利的累计秒数
+  bgTargetId: string | null;  // 后台挂机目标怪缓存（每 15s 重算，稳定胜模拟较重）
+  bgTargetCheckAt: number;    // 上次重算目标的时间戳
+  bgKills: number;            // 本次会话后台胜利场次（悬浮指示器展示用）
   // 丹药临时 buff（可多系并存；旧存档由 markHydrated 从 activeBattleBuffAtk/buffExpireAt 迁移）
   activeBuffs: ActiveBuff[];
 

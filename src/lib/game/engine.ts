@@ -294,6 +294,29 @@ export function playerWins(pStats: PlayerStats, monster: MonsterDef): boolean {
   return pHp > 0 && mHp <= 0;
 }
 
+// ---------- 自动战斗目标选取（离线结算与页签后台挂机共用） ----------
+
+// 从当前区域由低到高找到能稳定击败（3 局模拟胜 ≥ 2）的最高档怪物，不虚报全胜；
+// 无稳定目标时回退全局推荐怪物。区域表按 tier 升序，持续覆盖取最高档。
+export function pickAutoTarget(state: GameState): MonsterDef | null {
+  const pStats = computePlayerStats(state);
+  const avgLv = avgCombatLevel(state);
+  const region = state.lastRegionId || 'r1';
+  const candidates = getMonstersByRegion(region).filter(m => !m.isBoss);
+  let target: MonsterDef | null = null;
+  for (const m of candidates) {
+    let wins = 0;
+    for (let i = 0; i < 3; i++) if (playerWins(pStats, m)) wins++;
+    if (wins >= 2) target = m; // 区域表按 tier 升序，持续覆盖取最高档
+  }
+  return target ?? getRecommendedMonster(avgLv);
+}
+
+// 每场战斗耗时估算：max(8, rounds × 1.6s)（离线与后台挂机同源）
+export function autoBattleSeconds(pStats: PlayerStats, monster: MonsterDef): number {
+  return Math.max(8, Math.ceil(monster.hp / Math.max(1, pStats.atk * 0.55)) * 1.6 + 3);
+}
+
 // ---------- 离线结算 ----------
 
 export function computeOfflineReport(state: GameState, now: number): OfflineReport | null {
@@ -360,20 +383,10 @@ export function computeOfflineReport(state: GameState, now: number): OfflineRepo
   // 2. 离线战斗（若开启自动战斗）
   if (state.autoBattleEnabled && state.initialized) {
     const pStats = computePlayerStats(state);
-    const avgLv = avgCombatLevel(state);
-    // 从低到高找到能稳定击败（3 局模拟胜 ≥ 2）的最高档怪物，不再虚报全胜
-    const region = state.lastRegionId || 'r1';
-    const candidates = getMonstersByRegion(region).filter(m => !m.isBoss);
-    let target: MonsterDef | null = null;
-    for (const m of candidates) {
-      let wins = 0;
-      for (let i = 0; i < 3; i++) if (playerWins(pStats, m)) wins++;
-      if (wins >= 2) target = m; // 区域表按 tier 升序，持续覆盖取最高档
-    }
-    const monster = target ?? getRecommendedMonster(avgLv);
+    // 复用自动战斗目标选取：能稳定击败的最高档怪物（与页签后台挂机同源）
+    const monster = pickAutoTarget(state);
     if (monster) {
-      // 每场战斗耗时估算：max(8, rounds × 1.6s)
-      const battleSec = Math.max(8, Math.ceil(monster.hp / Math.max(1, pStats.atk * 0.55)) * 1.6 + 3);
+      const battleSec = autoBattleSeconds(pStats, monster);
       const effSeconds = seconds * eff;
       let kills = Math.floor(effSeconds / battleSec);
       kills = Math.min(kills, 5000);

@@ -60,6 +60,25 @@ function Toast() {
   );
 }
 
+// 后台自动战斗悬浮指示：开启自动战斗且不在战斗页时展示（收益由 tick 后台战斗持续入账）
+function AutoBattleBadge() {
+  const auto = useGameStore(s => s.autoBattleEnabled);
+  const tab = useGameStore(s => s.tab);
+  const bgKills = useGameStore(s => s.bgKills);
+  if (!auto || tab === 'combat') return null;
+  return (
+    <div className="fixed bottom-[calc(68px+env(safe-area-inset-bottom))] left-0 right-0 z-30 flex justify-center pointer-events-none" aria-live="polite">
+      <div className="bg-stone-900/90 backdrop-blur border border-amber-800/50 text-amber-200/90 text-[10px] rounded-full px-3 py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.5)] flex items-center gap-1.5">
+        <span className="relative flex h-1.5 w-1.5" aria-hidden>
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+        </span>
+        🤖 自动战斗挂机中{bgKills > 0 ? ` · 本次已胜 ${bgKills} 场` : ''}
+      </div>
+    </div>
+  );
+}
+
 function GameShell() {
   const tab = useGameStore(s => s.tab);
   useGameTick();
@@ -83,6 +102,7 @@ function GameShell() {
           </div>
         </main>
         <BottomNav />
+        <AutoBattleBadge />
       </div>
       <OfflineModal />
       <EventModal />

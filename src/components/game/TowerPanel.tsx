@@ -8,6 +8,7 @@ import { towerMonster, towerTier, towerMilestoneGems, towerClearItems, towerEqui
 import { getItem, QUALITY_TEXT } from '@/lib/game/items';
 import { Section, ActionButton, formatNum, SubHeader } from './ui-bits';
 import { TowerChallengeReport } from '@/lib/game/tower';
+import { currentTowerScene, nextTowerScene } from '@/lib/game/scenes';
 import { cn } from '@/lib/utils';
 import { Swords } from 'lucide-react';
 
@@ -20,6 +21,9 @@ export function TowerPanel({ onBack }: { onBack: () => void }) {
   const nextFloor = best + 1;
   const nextMonster = towerMonster(nextFloor);
   const pStats = computePlayerStats(store);
+  // 塔中画境：已达最高画境作横幅，下一个待解锁作预告
+  const towerScene = currentTowerScene(store);
+  const upcomingScene = nextTowerScene(store);
 
   // 战力提示：塔层阶级 vs 玩家大约对应阶级（单项战斗技能均值/5，与战斗面板同口径）
   const avgCombat = (['hp', 'weaponry', 'power', 'defence', 'speed'] as const)
@@ -157,6 +161,31 @@ export function TowerPanel({ onBack }: { onBack: () => void }) {
   return (
     <div className="p-3 pb-24 space-y-3">
       <SubHeader title="锁妖塔" onBack={onBack} />
+
+      {/* 塔中画境横幅（山河画册同源：达到对应首通层数即收录） */}
+      {towerScene ? (
+        <div className="relative rounded-xl overflow-hidden border border-fuchsia-900/50">
+          <img src={towerScene.img} alt={towerScene.name} className="w-full h-24 object-cover"
+            onError={e => { e.currentTarget.style.visibility = 'hidden'; }} />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/25 to-black/40" />
+          <div className="absolute inset-0 px-3 py-2 flex flex-col justify-center">
+            <div className="text-[9px] text-fuchsia-200/80 tracking-[0.25em]">此刻所在 · 已收录画册</div>
+            <div className="text-sm font-bold text-white drop-shadow">🗼 {towerScene.name}</div>
+            <div className="text-[10px] text-stone-300/90 mt-0.5 line-clamp-2 max-w-[85%]">{towerScene.caption}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative rounded-xl overflow-hidden border border-stone-800 h-24 bg-gradient-to-r from-stone-900 to-fuchsia-950/30 flex flex-col justify-center px-3">
+          <div className="text-[9px] text-stone-500 tracking-[0.25em]">画境未收录</div>
+          <div className="text-sm font-bold text-stone-400">🗼 锁妖塔 · ？？？</div>
+          {upcomingScene && (
+            <div className="text-[10px] text-stone-500 mt-0.5">首通第 {upcomingScene.refId} 层后收录画境「{upcomingScene.name}」</div>
+          )}
+        </div>
+      )}
+      {towerScene && upcomingScene && (
+        <div className="text-[10px] text-stone-500 text-center">下一张画境「{upcomingScene.name}」：首通第 {upcomingScene.refId} 层后收录</div>
+      )}
 
       {/* 塔层主卡 */}
       <div className="bg-gradient-to-b from-fuchsia-950/40 via-stone-900 to-stone-900 border border-fuchsia-900/50 rounded-xl p-4 text-center relative overflow-hidden">

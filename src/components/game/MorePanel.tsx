@@ -378,6 +378,7 @@ const ALBUM_GROUPS: { kind: SceneKind; label: string }[] = [
   { kind: 'region', label: '行走山河' },
   { kind: 'activity', label: '修行手记' },
   { kind: 'boss', label: '强敌之影' },
+  { kind: 'tower', label: '锁妖塔影' },
 ];
 
 function AlbumView({ onBack }: { onBack: () => void }) {
