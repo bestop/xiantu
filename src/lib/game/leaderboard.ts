@@ -59,7 +59,10 @@ function npcPower(i: number, hoursOfPlay: number): number {
 }
 
 export function getLeaderboard(state: GameState): { entries: LeaderEntry[]; playerRank: number } {
-  const hours = Math.max(0, (Date.now() - state.stats.playStart) / 3600000);
+  // 坏档硬化：playStart 缺失/被篡改为非数值时 Date.now()-x → NaN，
+  // 会沿 npcPower 污染全部 31 条评分与排序（面板整体 NaN），此处钳为 0 小时
+  const start = Number(state.stats.playStart);
+  const hours = start > 0 ? Math.max(0, (Date.now() - start) / 3600000) : 0;
   const npcs: LeaderEntry[] = NPC_NAMES.map((n, i) => ({
     name: n.name, icon: n.icon, power: npcPower(i, hours), isPlayer: false,
   }));

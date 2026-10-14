@@ -149,7 +149,9 @@ export function getSectMembers(state: GameState): {
   if (!sect) {
     return { members: [], playerRank: 0, npcTotal: 0, total: 0, level: 1 };
   }
-  const hours = Math.max(0, (Date.now() - state.stats.playStart) / 3600000);
+  // 坏档硬化：playStart 异常时钳 0 小时（同 leaderboard.ts 口径，防 NaN 污染同门榜/宗门等级）
+  const start = Number(state.stats.playStart);
+  const hours = start > 0 ? Math.max(0, (Date.now() - start) / 3600000) : 0;
   const names = SECT_NPC_NAMES[sect.sectId] ?? [];
   const npcs: SectMemberEntry[] = names.map((name, i) => ({
     name,
