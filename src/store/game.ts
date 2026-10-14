@@ -219,6 +219,10 @@ function normalizeWorldBoss(wb: WorldBossState): WorldBossState {
 // - 旧档缺 dayKey/dayContrib 字段：兜底 0，避免面板 formatNum(undefined) 显示 NaN
 function normalizeSect(sect: PlayerSectState | null | undefined, now: number): PlayerSectState | null {
   if (!sect || typeof sect.sectId !== 'string') return null;
+  // 坏档防护：sectId 不在宗门总表（篡改档/跨版本残留）时置空回选择界面，
+  // 避免 SectPanel 的 SECT_MAP[sectId] 取 undefined 后 def.tone 抛 TypeError 白屏
+  // （同源防护口径：133d763 灵宠 monsterId 校验）
+  if (!SECT_MAP[sect.sectId as SectId]) return null;
   const num = (v: unknown): number =>
     Number.isFinite(v) && (v as number) > 0 ? Math.floor(v as number) : 0;
   const key = todayKey(now);

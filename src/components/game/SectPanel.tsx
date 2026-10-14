@@ -50,7 +50,8 @@ export function SectPanel({ onBack }: { onBack: () => void }) {
               {SECTS.map(s => (
                 <div key={s.id} className={cn('rounded-xl border overflow-hidden bg-stone-900/80', s.tone.split(' ')[2])}>
                   <div className="relative h-20">
-                    <img src={`/sects/sect-${s.id}.jpg`} alt={`${s.name}画卷`} loading="lazy" className="w-full h-full object-cover" />
+                    {/* 404 防御：破图隐藏，保留渐变底与宗门信息（与图鉴/画册兜底同口径） */}
+                    <img src={`/sects/sect-${s.id}.jpg`} alt={`${s.name}画卷`} loading="lazy" onError={e => { e.currentTarget.style.visibility = 'hidden'; }} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/25 to-transparent" />
                     <div className="absolute bottom-1.5 left-3 flex items-center gap-2">
                       <span className={cn('w-8 h-8 rounded-lg border flex items-center justify-center bg-stone-950/85 shrink-0', s.tone)} aria-hidden>
@@ -106,7 +107,7 @@ function SectHome({ confirmLeave, setConfirmLeave, flash }: {
       {/* 宗门卡 */}
       <div className={cn('rounded-xl border overflow-hidden bg-gradient-to-b from-stone-900 to-stone-950 relative', def.tone.split(' ')[2])}>
         <div className="relative h-24">
-          <img src={`/sects/sect-${def.id}.jpg`} alt={`${def.name}山门画卷`} className="w-full h-full object-cover" />
+          <img src={`/sects/sect-${def.id}.jpg`} alt={`${def.name}山门画卷`} onError={e => { e.currentTarget.style.visibility = 'hidden'; }} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/35 to-transparent" />
           <div className="absolute bottom-2 left-4 flex items-center gap-2.5">
             <div className="w-11 h-11 rounded-full border border-stone-700 bg-stone-950/85 flex items-center justify-center shrink-0">
