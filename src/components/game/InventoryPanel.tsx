@@ -12,7 +12,8 @@ import {
   MAX_REFINE, isRefinable, refineCost, refineSuccessRate,
   refineMainMult, refineAffixMult, refineName, refineOreName,
 } from '@/lib/game/refine';
-import { Section, ActionButton, QualityBadge, ProgressBar, formatNum } from './ui-bits';
+import { Section, ActionButton, QualityBadge, ProgressBar, formatNum,
+  QUALITY_GLOW, QUALITY_BORDER, QUALITY_TILE } from './ui-bits';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, Trash2 } from 'lucide-react';
 
@@ -24,35 +25,7 @@ const SLOT_META: Record<EquipSlot, { icon: string; label: string }> = {
   accessory: { icon: '💍', label: '饰品' },
 };
 
-// 品质发光（卡片/槽位辉光）
-const QUALITY_GLOW: Record<ItemQuality, string> = {
-  common: 'shadow-[0_0_10px_rgba(120,113,108,0.15)]',
-  fine: 'shadow-[0_0_10px_rgba(16,185,129,0.2)]',
-  rare: 'shadow-[0_0_10px_rgba(34,211,238,0.2)]',
-  epic: 'shadow-[0_0_10px_rgba(168,85,247,0.25)]',
-  legendary: 'shadow-[0_0_12px_rgba(245,158,11,0.3)]',
-  mythic: 'shadow-[0_0_14px_rgba(244,63,94,0.35)]',
-};
-
-// 品质卡片外框（图形化卡片描边）
-const QUALITY_BORDER: Record<ItemQuality, string> = {
-  common: 'border-stone-700/90',
-  fine: 'border-emerald-800',
-  rare: 'border-cyan-800',
-  epic: 'border-purple-800',
-  legendary: 'border-amber-600/80',
-  mythic: 'border-rose-600/80',
-};
-
-// 品质图标砖：渐变底 + 彩边（图块化视觉核心）
-const QUALITY_TILE: Record<ItemQuality, string> = {
-  common: 'from-stone-600/40 via-stone-800/70 to-stone-900 border-stone-600/70',
-  fine: 'from-emerald-900/70 via-emerald-950/70 to-stone-900 border-emerald-700/70',
-  rare: 'from-cyan-900/70 via-cyan-950/70 to-stone-900 border-cyan-600/70',
-  epic: 'from-purple-900/70 via-purple-950/70 to-stone-900 border-purple-600/70',
-  legendary: 'from-amber-800/70 via-amber-950/70 to-stone-900 border-amber-500/80',
-  mythic: 'from-rose-800/70 via-rose-950/70 to-stone-900 border-rose-500/80',
-};
+// 品质辉光/外框/图标砖：共享自 ui-bits（与首页装备摘要同源）
 
 // 主属性速览缩写（卡片空间紧凑）
 const STAT_SHORT: Record<AffixKey, string> = {

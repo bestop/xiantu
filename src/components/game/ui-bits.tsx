@@ -7,6 +7,37 @@ import { QUALITY_COLORS, QUALITY_NAMES, QUALITY_TEXT } from '@/lib/game/items';
 import { ItemQuality } from '@/types/game';
 import { cn } from '@/lib/utils';
 
+// ---------- 装备品质视觉（首页/背包共享，神品辉光口径统一） ----------
+// 品质发光（卡片/槽位辉光）
+export const QUALITY_GLOW: Record<ItemQuality, string> = {
+  common: 'shadow-[0_0_10px_rgba(120,113,108,0.15)]',
+  fine: 'shadow-[0_0_10px_rgba(16,185,129,0.2)]',
+  rare: 'shadow-[0_0_10px_rgba(34,211,238,0.2)]',
+  epic: 'shadow-[0_0_10px_rgba(168,85,247,0.25)]',
+  legendary: 'shadow-[0_0_12px_rgba(245,158,11,0.3)]',
+  mythic: 'shadow-[0_0_14px_rgba(244,63,94,0.35)]',
+};
+
+// 品质卡片外框（图形化卡片描边）
+export const QUALITY_BORDER: Record<ItemQuality, string> = {
+  common: 'border-stone-700/90',
+  fine: 'border-emerald-800',
+  rare: 'border-cyan-800',
+  epic: 'border-purple-800',
+  legendary: 'border-amber-600/80',
+  mythic: 'border-rose-600/80',
+};
+
+// 品质图标砖：渐变底 + 彩边（图块化视觉核心）
+export const QUALITY_TILE: Record<ItemQuality, string> = {
+  common: 'from-stone-600/40 via-stone-800/70 to-stone-900 border-stone-600/70',
+  fine: 'from-emerald-900/70 via-emerald-950/70 to-stone-900 border-emerald-700/70',
+  rare: 'from-cyan-900/70 via-cyan-950/70 to-stone-900 border-cyan-600/70',
+  epic: 'from-purple-900/70 via-purple-950/70 to-stone-900 border-purple-600/70',
+  legendary: 'from-amber-800/70 via-amber-950/70 to-stone-900 border-amber-500/80',
+  mythic: 'from-rose-800/70 via-rose-950/70 to-stone-900 border-rose-500/80',
+};
+
 // 区块卡片（标题带金色装饰竖条）
 export function Section({ title, extra, children, className }: {
   title?: string; extra?: ReactNode; children: ReactNode; className?: string;
@@ -31,9 +62,9 @@ export function Section({ title, extra, children, className }: {
   );
 }
 
-// 进度条（带流光扫过效果）
-export function ProgressBar({ value, max, className, barClass, showText, shimmer = true }: {
-  value: number; max: number; className?: string; barClass?: string; showText?: boolean; shimmer?: boolean;
+// 进度条（带流光扫过效果；text 可覆盖默认 "当前/上限" 文案）
+export function ProgressBar({ value, max, className, barClass, showText, text, shimmer = true }: {
+  value: number; max: number; className?: string; barClass?: string; showText?: boolean; text?: string; shimmer?: boolean;
 }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
@@ -50,9 +81,9 @@ export function ProgressBar({ value, max, className, barClass, showText, shimmer
         )}
         style={{ width: `${pct}%` }}
       />
-      {showText && (
+      {(showText || text != null) && (
         <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white/90 font-medium tabular-nums drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
-          {Math.floor(value)}/{Math.floor(max)}
+          {text ?? `${Math.floor(value)}/${Math.floor(max)}`}
         </span>
       )}
     </div>

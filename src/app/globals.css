@@ -293,6 +293,15 @@
   animation: emeraldPulse 2s ease-in-out infinite;
 }
 
+/* 卡片进场：上浮淡入（backwards 保证延迟期间不可见） */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise {
+  animation: riseIn 0.38s ease-out backwards;
+}
+
 /* ---------- 细节 ---------- */
 /* 隐藏滚动条（横向 chips 等） */
 .scrollbar-none {
