@@ -222,7 +222,8 @@ function EquipSocket({ slot, eq, onTap }: { slot: EquipSlot; eq: Equipment | nul
   return (
     <button onClick={onTap}
       className={cn('relative rounded-xl p-1.5 min-h-[76px] flex flex-col items-center justify-center gap-0.5 border bg-gradient-to-br overflow-hidden transition active:scale-95',
-        QUALITY_TILE[eq.quality], QUALITY_GLOW[eq.quality])}>
+        QUALITY_TILE[eq.quality], QUALITY_GLOW[eq.quality],
+        eq.quality === 'mythic' && 'animate-mythic-glow')}>
       <span className="absolute top-1 left-1 text-[8px] leading-none px-1 py-0.5 rounded bg-black/50 text-stone-300 tabular-nums">{eq.tier}阶</span>
       {(eq.refine ?? 0) > 0 && (
         <span className="absolute top-1 right-1 text-[8px] leading-none px-1 py-0.5 rounded bg-amber-900/90 text-amber-200 font-bold">+{eq.refine}</span>
@@ -239,6 +240,7 @@ function GearCard({ eq, isEquipped, onTap }: { eq: Equipment; isEquipped: boolea
     <button onClick={onTap}
       className={cn('relative rounded-xl border p-1.5 flex flex-col items-center gap-1 bg-stone-900/80 transition active:scale-95 hover:bg-stone-900',
         QUALITY_BORDER[eq.quality], QUALITY_GLOW[eq.quality],
+        eq.quality === 'mythic' && 'animate-mythic-glow',
         isEquipped && 'border-amber-500/80 ring-1 ring-amber-500/60')}>
       <div className={cn('relative w-full aspect-square rounded-lg border bg-gradient-to-br flex items-center justify-center overflow-visible', QUALITY_TILE[eq.quality])}>
         <span className="text-3xl" aria-hidden>{eq.icon}</span>
@@ -265,7 +267,8 @@ function ItemCard({ item, qty, onTap }: { item: BaseItem; qty: number; onTap: ()
   return (
     <button onClick={onTap}
       className={cn('relative rounded-xl border p-1.5 flex flex-col items-center gap-1 bg-stone-900/80 transition active:scale-95 hover:bg-stone-900',
-        QUALITY_BORDER[item.quality], QUALITY_GLOW[item.quality])}>
+        QUALITY_BORDER[item.quality], QUALITY_GLOW[item.quality],
+        item.quality === 'mythic' && 'animate-mythic-glow')}>
       <div className={cn('relative w-full aspect-square rounded-lg border bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[item.quality])}>
         <span className="text-3xl" aria-hidden>{item.icon}</span>
         {qty > 1 && (
@@ -347,7 +350,8 @@ function GearDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
       <Section className="text-center relative overflow-hidden">
         <div aria-hidden className="absolute -top-10 left-1/2 -translate-x-1/2 w-44 h-24 rounded-full bg-amber-600/10 blur-2xl pointer-events-none" />
         <div className="relative flex justify-center mb-2.5">
-          <div className={cn('w-24 h-24 rounded-2xl border-2 bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[eq.quality], QUALITY_GLOW[eq.quality])}>
+          <div className={cn('w-24 h-24 rounded-2xl border-2 bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[eq.quality], QUALITY_GLOW[eq.quality],
+            eq.quality === 'mythic' && 'animate-mythic-glow')}>
             <span className="text-5xl" aria-hidden>{eq.icon}</span>
           </div>
         </div>
@@ -479,7 +483,8 @@ function ItemDetail({ itemId, qty, onBack }: { itemId: string; qty: number; onBa
 
       <Section className="text-center">
         <div className="flex justify-center mb-2.5">
-          <div className={cn('w-20 h-20 rounded-2xl border-2 bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[item.quality], QUALITY_GLOW[item.quality])}>
+          <div className={cn('w-20 h-20 rounded-2xl border-2 bg-gradient-to-br flex items-center justify-center', QUALITY_TILE[item.quality], QUALITY_GLOW[item.quality],
+            item.quality === 'mythic' && 'animate-mythic-glow')}>
             <span className="text-4xl" aria-hidden>{item.icon}</span>
           </div>
         </div>

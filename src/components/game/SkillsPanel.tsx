@@ -128,7 +128,7 @@ export function SkillsPanel() {
       <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-3 px-3">
         {CATEGORY_TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={cn('shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border min-h-[36px] transition-all',
+            className={cn('shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border min-h-[36px] transition-all active:scale-95',
               tab === t.id
                 ? 'bg-gradient-to-b from-amber-800/80 to-amber-950/70 border-amber-500/60 text-amber-100'
                 : 'bg-stone-900 border-stone-800 text-stone-400 hover:border-stone-700')}>
@@ -147,12 +147,12 @@ export function SkillsPanel() {
           const cat = CATEGORY_STYLE[s.category];
           return (
             <button key={s.id} onClick={() => setDetail(s.id)}
-              className={cn('relative rounded-xl overflow-hidden border text-left transition active:scale-[0.98] group',
+              className={cn('relative rounded-xl overflow-hidden border text-left transition-all duration-200 ease-out active:scale-[0.97] group',
                 training
                   ? 'border-emerald-500/70 shadow-[0_0_16px_rgba(16,185,129,0.18)] animate-emerald-pulse'
                   : maxed
-                    ? 'border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.12)]'
-                    : 'border-stone-800 hover:border-stone-700')}>
+                    ? 'border-rose-600/80 animate-mythic-glow'
+                    : 'border-stone-800 hover:border-stone-700 active:border-amber-700/60')}>
               {/* 修炼中顶部流光 */}
               {training && <div aria-hidden className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/80 to-transparent z-20" />}
               {/* 画布（emoji 兜底在最底层） */}
@@ -160,7 +160,7 @@ export function SkillsPanel() {
                 <span aria-hidden className="absolute inset-0 flex items-center justify-center text-4xl opacity-70">{s.icon}</span>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={s.img} alt={s.name} loading="lazy" onError={hideImg}
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-active:scale-105" />
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out group-active:scale-110 group-active:brightness-110" />
                 {/* 渐变压暗，保证文字可读 */}
                 <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-stone-950/95 via-stone-950/25 to-transparent" />
                 {/* 角标：分类（左上） */}
@@ -221,8 +221,9 @@ function SkillDetail({ skillId, onBack }: { skillId: SkillId; onBack: () => void
         <ChevronLeft className="w-4 h-4" /> 返回技能列表
       </button>
 
-      {/* ===== 头图横幅 ===== */}
-      <section className="relative rounded-2xl overflow-hidden border border-stone-800 shadow-[0_0_20px_rgba(0,0,0,0.35)]">
+      {/* ===== 头图横幅（满级时对齐神品呼吸辉光） ===== */}
+      <section className={cn('relative rounded-2xl overflow-hidden border shadow-[0_0_20px_rgba(0,0,0,0.35)]',
+        maxed ? 'border-rose-600/80 animate-mythic-glow' : 'border-stone-800')}>
         <div className="relative h-40 w-full bg-stone-800">
           <span aria-hidden className="absolute inset-0 flex items-center justify-center text-5xl opacity-70">{def.icon}</span>
           {/* eslint-disable-next-line @next/next/no-img-element */}

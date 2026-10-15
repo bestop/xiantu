@@ -126,7 +126,8 @@ export function HomePanel() {
         <div className="flex gap-1.5 mt-2 relative">
           {equips.map((e, i) => e ? (
             <div key={i} className={cn('flex-1 rounded-lg px-2 py-1.5 text-center min-h-[48px] flex flex-col justify-center border bg-gradient-to-br transition-transform active:scale-[0.97]',
-              QUALITY_TILE[e.quality], QUALITY_GLOW[e.quality])}>
+              QUALITY_TILE[e.quality], QUALITY_GLOW[e.quality],
+              e.quality === 'mythic' && 'animate-mythic-glow')}>
               <div className={cn('text-[11px] font-medium truncate px-0.5', QUALITY_TEXT[e.quality])}>
                 {e.icon} {e.name}{e.refine > 0 && <span className="text-[9px] text-amber-300/90"> +{e.refine}</span>}
               </div>

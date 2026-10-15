@@ -293,6 +293,15 @@
   animation: emeraldPulse 2s ease-in-out infinite;
 }
 
+/* 神品呼吸辉光（玫瑰色，对齐装备神品口径；满级技能卡 / 神品装备双侧同源） */
+@keyframes mythicGlow {
+  0%, 100% { box-shadow: 0 0 6px rgba(244, 63, 94, 0.18); }
+  50% { box-shadow: 0 0 16px rgba(244, 63, 94, 0.45); }
+}
+.animate-mythic-glow {
+  animation: mythicGlow 2.4s ease-in-out infinite;
+}
+
 /* 卡片进场：上浮淡入（backwards 保证延迟期间不可见） */
 @keyframes riseIn {
   from { opacity: 0; transform: translateY(10px); }
